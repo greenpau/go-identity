@@ -30,4 +30,18 @@ func TestNewUser(t *testing.T) {
 	if err := user.Valid(); err != nil {
 		t.Fatalf("updated user, but was found to be invalid: %s", err)
 	}
+
+	roleName := "superadmin"
+	if err := user.AddRole(roleName); err != nil {
+		t.Fatalf("error adding role: %s", err)
+	}
+
+	if exists := user.HasRoles(); !exists {
+		t.Fatalf("added role, but the user has no roles")
+	}
+
+	if hasRole := user.HasRole(roleName); !hasRole {
+		t.Fatalf("added %s role, but the user has no %s role", roleName, roleName)
+	}
+
 }

@@ -87,3 +87,56 @@ func (user *User) AddEmailAddress(s string) error {
 	user.EmailAddresses = append(user.EmailAddresses, email)
 	return nil
 }
+
+// HasEmails checks whether a user has email address.
+func (user *User) HasEmails() bool {
+	if len(user.EmailAddresses) == 0 {
+		return false
+	}
+	return true
+}
+
+// HasRoles checks whether a user has a role.
+func (user *User) HasRoles() bool {
+	if len(user.Roles) == 0 {
+		return false
+	}
+	return true
+}
+
+// HasRole checks whether a user has a specific role.
+func (user *User) HasRole(s string) bool {
+	if len(user.Roles) == 0 {
+		return false
+	}
+	role, err := NewRole(s)
+	if err != nil {
+		return false
+	}
+
+	for _, r := range user.Roles {
+		if (r.Name == role.Name) && (r.Organization == role.Organization) {
+			return true
+		}
+	}
+	return false
+}
+
+// AddRole adds a role to a user identity.
+func (user *User) AddRole(s string) error {
+	role, err := NewRole(s)
+	if err != nil {
+		return err
+	}
+	if len(user.Roles) == 0 {
+		user.Roles = append(user.Roles, role)
+		return nil
+	}
+	for _, r := range user.Roles {
+		if (r.Name == role.Name) && (r.Organization == role.Organization) {
+			return nil
+		}
+	}
+	user.Roles = append(user.Roles, role)
+	return nil
+}

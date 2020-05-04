@@ -1,4 +1,4 @@
-package identity
+package utils
 
 import (
 	"io/ioutil"
@@ -18,7 +18,7 @@ func expandHomePath(fp string) (string, error) {
 	return fp, nil
 }
 
-func readFileBytes(fp string) ([]byte, error) {
+func ReadFileBytes(fp string) ([]byte, error) {
 	var err error
 	fp, err = expandHomePath(fp)
 	if err != nil {

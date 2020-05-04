@@ -3,6 +3,7 @@ package identity
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/greenpau/go-identity/internal/utils"
 	"github.com/greenpau/versioned"
 	"io/ioutil"
 	"sync"
@@ -103,7 +104,7 @@ func (db *Database) LoadFromFile(fp string) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	content, err := readFileBytes(fp)
+	content, err := utils.ReadFileBytes(fp)
 	if err != nil {
 		return err
 	}
