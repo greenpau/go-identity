@@ -46,8 +46,8 @@ func NewDatabase() *Database {
 
 // AddUser adds user identity to the database.
 func (db *Database) AddUser(user *User) (int, error) {
-	if user.Username == "" {
-		return 0, fmt.Errorf("username is empty")
+	if err := user.Valid(); err != nil {
+		return 0, fmt.Errorf("invalid user, %s", err)
 	}
 	id := NewID()
 	for i := 0; i < 10; i++ {
