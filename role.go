@@ -34,3 +34,8 @@ func (r *Role) String() string {
 	}
 	return r.Organization + "/" + r.Name
 }
+
+// GetRolesClaim returns roles field of a claim.
+func (r *Role) GetRolesClaim() string {
+	return ""
+}

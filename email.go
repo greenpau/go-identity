@@ -21,6 +21,7 @@ type EmailAddress struct {
 	Address   string `json:"address,omitempty" xml:"address,omitempty" yaml:"address,omitempty"`
 	Confirmed bool   `json:"confirmed,omitempty" xml:"confirmed,omitempty" yaml:"confirmed,omitempty"`
 	Domain    string `json:"domain,omitempty" xml:"domain,omitempty" yaml:"domain,omitempty"`
+	isPrimary bool   `json:"is_primary,omitempty" xml:"is_primary,omitempty" yaml:"is_primary,omitempty"`
 }
 
 // NewEmailAddress returns an instance of EmailAddress.
@@ -34,4 +35,12 @@ func NewEmailAddress(s string) (*EmailAddress, error) {
 		Domain:  parts[1],
 	}
 	return addr, nil
+}
+
+// Primary returns true is the email is a primary email.
+func (m *EmailAddress) Primary() bool {
+	if m.isPrimary {
+		return true
+	}
+	return false
 }

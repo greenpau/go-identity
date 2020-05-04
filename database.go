@@ -6,6 +6,7 @@ import (
 	"github.com/greenpau/go-identity/internal/utils"
 	"github.com/greenpau/versioned"
 	"io/ioutil"
+	"strings"
 	"sync"
 )
 
@@ -31,21 +32,23 @@ func init() {
 
 // Database is user identity database.
 type Database struct {
-	mu       *sync.RWMutex             `json:"-" xml:"-" yaml:"-"`
-	Info     *versioned.PackageManager `json:"-" xml:"-" yaml:"-"`
-	Revision uint64                    `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
-	RefID    map[string]int            `json:"-" xml:"-" yaml:"-"`
-	Users    []*User                   `json:"users,omitempty" xml:"users,omitempty" yaml:"users,omitempty"`
+	mu          *sync.RWMutex             `json:"-" xml:"-" yaml:"-"`
+	Info        *versioned.PackageManager `json:"-" xml:"-" yaml:"-"`
+	Revision    uint64                    `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
+	RefUsername map[string]*User          `json:"-" xml:"-" yaml:"-"`
+	RefID       map[string]*User          `json:"-" xml:"-" yaml:"-"`
+	Users       []*User                   `json:"users,omitempty" xml:"users,omitempty" yaml:"users,omitempty"`
 }
 
 // NewDatabase return an instance of Database.
 func NewDatabase() *Database {
 	db := &Database{
-		mu:       &sync.RWMutex{},
-		Info:     app,
-		Revision: 1,
-		RefID:    make(map[string]int),
-		Users:    []*User{},
+		mu:          &sync.RWMutex{},
+		Info:        app,
+		Revision:    1,
+		RefUsername: make(map[string]*User),
+		RefID:       make(map[string]*User),
+		Users:       []*User{},
 	}
 	return db
 }
@@ -55,33 +58,69 @@ func (db *Database) AddUser(user *User) error {
 	if err := user.Valid(); err != nil {
 		return fmt.Errorf("invalid user, %s", err)
 	}
-	id := NewID()
 	for i := 0; i < 10; i++ {
+		id := NewID()
 		if _, exists := db.RefID[id]; !exists {
 			user.ID = id
 			break
 		}
 	}
-	db.RefID[id] = len(db.Users)
+	username := strings.ToLower(user.Username)
+	db.RefUsername[username] = user
+	db.RefID[user.ID] = user
 	db.Users = append(db.Users, user)
 	return nil
 }
 
-// GetUserByID returns a user by id
-func (db *Database) GetUserByID(s string) (*User, error) {
-
-	return nil, fmt.Errorf("not supported")
+// AuthenticateUser adds user identity to the database.
+func (db *Database) AuthenticateUser(username, password string) (map[string]interface{}, bool, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	username = strings.ToLower(username)
+	if _, exists := db.RefUsername[username]; !exists {
+		return nil, false, fmt.Errorf("username does not exist")
+	}
+	user := db.RefUsername[username]
+	if user == nil {
+		return nil, false, fmt.Errorf("user associated with the username is nil")
+	}
+	if err := user.VerifyPassword(password); err != nil {
+		return nil, false, fmt.Errorf("invalid password")
+	}
+	userMap := make(map[string]interface{})
+	userMap["sub"] = username
+	if email := user.GetMailClaim(); email != "" {
+		userMap["mail"] = email
+	}
+	if name := user.GetNameClaim(); name != "" {
+		userMap["name"] = name
+	}
+	if roles := user.GetRolesClaim(); roles != "" {
+		userMap["roles"] = roles
+	}
+	return userMap, true, nil
 }
 
-// GetUserByUsername returns a user by username
-func (db *Database) GetUserByUsername(s string) (*User, error) {
-	return nil, fmt.Errorf("not supported")
-
+// getUserByID returns a user by id
+func (db *Database) getUserByID(s string) (*User, error) {
+	if user, exists := db.RefID[s]; exists {
+		return user, nil
+	}
+	return nil, fmt.Errorf("not found")
 }
 
-// GetUserByEmailAddress returns a liast of users associated with a specific email
+// getUserByUsername returns a user by username
+func (db *Database) getUserByUsername(s string) (*User, error) {
+	username := strings.ToLower(s)
+	if user, exists := db.RefUsername[username]; exists {
+		return user, nil
+	}
+	return nil, fmt.Errorf("not found")
+}
+
+// getUserByEmailAddress returns a liast of users associated with a specific email
 // address.
-func (db *Database) GetUserByEmailAddress(s string) (*User, error) {
+func (db *Database) getUserByEmailAddress(s string) (*User, error) {
 	return nil, fmt.Errorf("not supported")
 }
 
@@ -113,5 +152,21 @@ func (db *Database) LoadFromFile(fp string) error {
 		return err
 	}
 
+	if len(db.Users) > 0 {
+		for _, user := range db.Users {
+			if err := user.Valid(); err != nil {
+				return fmt.Errorf("invalid user %v, %s", user, err)
+			}
+			username := strings.ToLower(user.Username)
+			if _, exists := db.RefUsername[username]; exists {
+				return fmt.Errorf("duplicate username %s %v", user.Username, user)
+			}
+			if _, exists := db.RefID[user.ID]; exists {
+				return fmt.Errorf("duplicate user id: %s %v", user.ID, user)
+			}
+			db.RefUsername[username] = user
+			db.RefID[user.ID] = user
+		}
+	}
 	return nil
 }

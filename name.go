@@ -17,3 +17,11 @@ type Name struct {
 func NewName() *Name {
 	return &Name{}
 }
+
+// GetNameClaim returns name field of a claim.
+func (n *Name) GetNameClaim() string {
+	if n.First != "" && n.Last != "" {
+		return n.First + " " + n.Last
+	}
+	return ""
+}

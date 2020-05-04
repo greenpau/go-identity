@@ -2,7 +2,7 @@
   "revision": 1,
   "users": [
     {
-      "id": "81440f7a-d0d7-4325-87ce-43fff9db99ef",
+      "id": "6fbcf7ef-b6e5-4baa-a33e-f807650902b6",
       "username": "jsmith",
       "email_addresses": [
         {
@@ -14,15 +14,15 @@
         {
           "purpose": "generic",
           "type": "bcrypt",
-          "hash": "$2a$10$HsflUVOlFCMKKj5YUzuNMe91FiqvWSosC7DE50h14aVRi1OJyLvbK",
+          "hash": "$2a$10$54ADJsNl7GFJW/xNn.n7Hu39ZiYVa580B4HlmeNev1KjcrIc9PT1G",
           "cost": 10,
           "expired_at": "0001-01-01T00:00:00Z",
-          "created_at": "2020-05-04T21:37:25.13855898Z",
+          "created_at": "2020-05-04T23:49:27.621965234Z",
           "disabled_at": "0001-01-01T00:00:00Z"
         }
       ],
-      "created": "2020-05-04T21:37:25.138539251Z",
-      "last_modified": "2020-05-04T21:37:25.138539332Z"
+      "created": "2020-05-04T23:49:27.621934999Z",
+      "last_modified": "2020-05-04T23:49:27.621935094Z"
     }
   ]
 }

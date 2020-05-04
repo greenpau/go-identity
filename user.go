@@ -2,6 +2,7 @@ package identity
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -40,6 +41,9 @@ func NewUser(s string) *User {
 
 // Valid returns true if a user conforms to a standard.
 func (user *User) Valid() error {
+	if len(user.ID) != 36 {
+		return fmt.Errorf("invalid user id length: %d", len(user.ID))
+	}
 	if user.Username == "" {
 		return fmt.Errorf("username is empty")
 	}
@@ -139,4 +143,53 @@ func (user *User) AddRole(s string) error {
 	}
 	user.Roles = append(user.Roles, role)
 	return nil
+}
+
+// VerifyPassword verifies provided password matches to the one in the database.
+func (user *User) VerifyPassword(s string) error {
+	if len(user.Passwords) == 0 {
+		return fmt.Errorf("user has no passwords")
+	}
+	for _, p := range user.Passwords {
+		if p.Match(s) {
+			return nil
+		}
+	}
+	return fmt.Errorf("no match found")
+}
+
+// GetMailClaim returns primary email address.
+func (user *User) GetMailClaim() string {
+	if len(user.EmailAddresses) == 0 {
+		return ""
+	}
+	for _, mail := range user.EmailAddresses {
+		if mail.Primary() {
+			return mail.Address
+		}
+	}
+	return user.EmailAddresses[0].Address
+}
+
+// GetNameClaim returns name field of a claim.
+func (user *User) GetNameClaim() string {
+	if user.Name == nil {
+		return ""
+	}
+	if name := user.Name.GetNameClaim(); name != "" {
+		return name
+	}
+	return ""
+}
+
+// GetRolesClaim returns name field of a claim.
+func (user *User) GetRolesClaim() string {
+	if len(user.Roles) == 0 {
+		return ""
+	}
+	roles := []string{}
+	for _, role := range user.Roles {
+		roles = append(roles, role.String())
+	}
+	return strings.Join(roles, " ")
 }

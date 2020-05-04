@@ -75,3 +75,11 @@ func (p *Password) hashPassword(s string) error {
 	}
 	return fmt.Errorf("failed to hash a password, no hashing method found")
 }
+
+// Match returns true when the provided password matches the user.
+func (p *Password) Match(s string) bool {
+	if err := bcrypt.CompareHashAndPassword([]byte(p.Hash), []byte(s)); err == nil {
+		return true
+	}
+	return false
+}
