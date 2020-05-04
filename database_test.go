@@ -7,6 +7,7 @@ import (
 
 func TestNewDatabase(t *testing.T) {
 	var testFailed int
+	dbPath := "assets/tests/userdb.json"
 	db := NewDatabase()
 	complianceMessages, compliant := utils.GetTagCompliance(db)
 	if !compliant {
@@ -36,11 +37,19 @@ func TestNewDatabase(t *testing.T) {
 		t.Fatalf("failed adding user %v to user database: %s", user, err)
 	}
 
-	if err := db.SaveToFile("assets/tests/userdb.json"); err != nil {
-		t.Fatalf("error saving database: %s", err)
+	if err := db.SaveToFile(dbPath); err != nil {
+		t.Fatalf("error saving database at %s: %s", dbPath, err)
 	}
 }
 
 func TestLoadDatabase(t *testing.T) {
-
+	dbPath := "assets/tests/userdb.json"
+	dbCopyPath := "assets/tests/userdb_copy.json"
+	db := NewDatabase()
+	if err := db.LoadFromFile(dbPath); err != nil {
+		t.Fatalf("failed loading database at %s: %s", dbPath, err)
+	}
+	if err := db.SaveToFile(dbCopyPath); err != nil {
+		t.Fatalf("error saving database at %s: %s", dbCopyPath, err)
+	}
 }

@@ -97,3 +97,20 @@ func (db *Database) SaveToFile(fp string) error {
 	}
 	return nil
 }
+
+// LoadFromFile loads database contents from JSON file.
+func (db *Database) LoadFromFile(fp string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	content, err := readFileBytes(fp)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(content, db)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
