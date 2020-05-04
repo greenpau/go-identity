@@ -6,7 +6,7 @@ import (
 
 func TestNewID(t *testing.T) {
 	id := NewID()
-	if len(id) != 32 {
-		t.Fatalf("expected id char length is 32, received %d", len(id))
+	if len(id) != 36 {
+		t.Fatalf("expected id char length is 36, received %d", len(id))
 	}
 }

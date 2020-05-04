@@ -1,0 +1,28 @@
+{
+  "revision": 1,
+  "users": [
+    {
+      "id": "1275e1de-765f-4dd3-9436-dc8341bdce25",
+      "username": "jsmith",
+      "email_addresses": [
+        {
+          "address": "jsmith@gmail.com",
+          "domain": "gmail.com"
+        }
+      ],
+      "passwords": [
+        {
+          "purpose": "generic",
+          "type": "bcrypt",
+          "hash": "$2a$10$YWgiZ9CqyibEos5nWb/vsuWlJTAJ.RkoJX59iU.D.OZCYq1bCt/I2",
+          "cost": 10,
+          "expired_at": "0001-01-01T00:00:00Z",
+          "created_at": "2020-05-04T19:27:45.348424795Z",
+          "disabled_at": "0001-01-01T00:00:00Z"
+        }
+      ],
+      "created": "2020-05-04T19:27:45.348410299Z",
+      "last_modified": "2020-05-04T19:27:45.348410372Z"
+    }
+  ]
+}

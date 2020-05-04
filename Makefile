@@ -50,6 +50,7 @@ clean:
 qtest:
 	@echo "Perform quick tests ..."
 	@#go test -v -run TestVersioned *.go
+	@go test -v -run TestNewID *.go
 
 dep:
 	@echo "Making dependencies check ..."

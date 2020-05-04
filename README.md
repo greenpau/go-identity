@@ -15,6 +15,7 @@ The `Database` data strcuture allows managing these identities. Currently,
 the `Database` provides a way of managing local users for a web application.
 
 The key concurrency features of the `Database` are:
+
 * Only one Go routine is allowed making modifications to users at a time.
   During that time, the entire database locks.
 * Keeps user identities in `Users` slice of the `Database` data
@@ -25,3 +26,8 @@ The key concurrency features of the `Database` are:
   pointer to `User` or a slice of pointers to `User` instances. If a reference
   keeps unique values, then it is a single pointer, e.g. username. Otherwise,
   e.g. in the case of being a part of a company, it is a slice.
+
+The following keys are unique across the database:
+
+* ID
+* Username

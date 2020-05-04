@@ -2,7 +2,6 @@ package identity
 
 import (
 	"github.com/greenpau/go-identity/internal/utils"
-	"golang.org/x/crypto/bcrypt"
 	"testing"
 )
 
@@ -20,21 +19,28 @@ func TestNewDatabase(t *testing.T) {
 		t.Fatalf("encountered %d errors", testFailed)
 	}
 
-	user := NewUser()
-	password := NewID()
-	user.Username = "jsmith"
-
+	user := NewUser("jsmith")
+	email := "jsmith@gmail.com"
+	password := "jsmith123"
 	t.Logf("Username: %s", user.Username)
 	t.Logf("Password: %s", password)
 
-	user.Password = NewPassword()
-	if err := user.Password.HashPassword(password); err != nil {
-		t.Fatalf("failed to hash password %s for user %s", password, user.Username)
+	if err := user.AddPassword(password); err != nil {
+		t.Fatalf("failed adding password: %s", err)
 	}
-	t.Logf("Password Hash: %s (type: %s, cost: %d)", user.Password.Hash, user.Password.Type, user.Password.Cost)
+	if err := user.AddEmailAddress(email); err != nil {
+		t.Fatalf("failed adding email address: %s", err)
+	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password.Hash), []byte(password)); err != nil {
-		t.Fatalf("mismatch between the previously created hash and user password: %s", err)
+	if err := db.AddUser(user); err != nil {
+		t.Fatalf("failed adding user %v to user database: %s", user, err)
 	}
+
+	if err := db.SaveToFile("assets/tests/userdb.json"); err != nil {
+		t.Fatalf("error saving database: %s", err)
+	}
+}
+
+func TestLoadDatabase(t *testing.T) {
 
 }

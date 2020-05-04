@@ -7,7 +7,7 @@ import (
 
 func TestNewRegistration(t *testing.T) {
 	var testFailed int
-	user := NewUser()
+	user := NewUser("jsmith")
 	registration := NewRegistration(user)
 	complianceMessages, compliant := utils.GetTagCompliance(registration)
 	if !compliant {

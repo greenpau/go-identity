@@ -1,8 +1,11 @@
 package identity
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/greenpau/versioned"
+	"io/ioutil"
+	"sync"
 )
 
 var (
@@ -27,15 +30,17 @@ func init() {
 
 // Database is user identity database.
 type Database struct {
-	Info     *versioned.PackageManager `json:"info,omitempty" xml:"info,omitempty" yaml:"info,omitempty"`
+	mu       *sync.RWMutex             `json:"-" xml:"-" yaml:"-"`
+	Info     *versioned.PackageManager `json:"-" xml:"-" yaml:"-"`
 	Revision uint64                    `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
-	RefID    map[string]int            `json:"ref_id,omitempty" xml:"ref_id,omitempty" yaml:"ref_id,omitempty"`
+	RefID    map[string]int            `json:"-" xml:"-" yaml:"-"`
 	Users    []*User                   `json:"users,omitempty" xml:"users,omitempty" yaml:"users,omitempty"`
 }
 
 // NewDatabase return an instance of Database.
 func NewDatabase() *Database {
 	db := &Database{
+		mu:       &sync.RWMutex{},
 		Info:     app,
 		Revision: 1,
 		RefID:    make(map[string]int),
@@ -45,9 +50,9 @@ func NewDatabase() *Database {
 }
 
 // AddUser adds user identity to the database.
-func (db *Database) AddUser(user *User) (int, error) {
+func (db *Database) AddUser(user *User) error {
 	if err := user.Valid(); err != nil {
-		return 0, fmt.Errorf("invalid user, %s", err)
+		return fmt.Errorf("invalid user, %s", err)
 	}
 	id := NewID()
 	for i := 0; i < 10; i++ {
@@ -58,5 +63,37 @@ func (db *Database) AddUser(user *User) (int, error) {
 	}
 	db.RefID[id] = len(db.Users)
 	db.Users = append(db.Users, user)
-	return db.RefID[id], nil
+	return nil
+}
+
+// GetUserByID returns a user by id
+func (db *Database) GetUserByID(s string) (*User, error) {
+
+	return nil, fmt.Errorf("not supported")
+}
+
+// GetUserByUsername returns a user by username
+func (db *Database) GetUserByUsername(s string) (*User, error) {
+	return nil, fmt.Errorf("not supported")
+
+}
+
+// GetUserByEmailAddress returns a liast of users associated with a specific email
+// address.
+func (db *Database) GetUserByEmailAddress(s string) (*User, error) {
+	return nil, fmt.Errorf("not supported")
+}
+
+// SaveToFile saves database contents to JSON file.
+func (db *Database) SaveToFile(fp string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	data, err := json.MarshalIndent(db, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := ioutil.WriteFile(fp, []byte(data), 0600); err != nil {
+		return fmt.Errorf("failed to write data to %s, error: %s", fp, err)
+	}
+	return nil
 }

@@ -37,6 +37,10 @@ func GetTagCompliance(resource interface{}) ([]string, bool) {
 			}
 
 			tagValue := resourceField.Tag.Get(tagName)
+
+			if tagValue == "-" {
+				continue
+			}
 			if tagValue == "" {
 				result = false
 				output = append(output, fmt.Sprintf(
