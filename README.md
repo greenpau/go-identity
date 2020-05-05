@@ -31,3 +31,5 @@ The following keys are unique across the database:
 
 * ID
 * Username
+* EmailAddress: a user can have multiple emails, but the emails must
+  be unique across the database.

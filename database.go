@@ -35,7 +35,7 @@ type Database struct {
 	mu              *sync.RWMutex             `json:"-" xml:"-" yaml:"-"`
 	Info            *versioned.PackageManager `json:"-" xml:"-" yaml:"-"`
 	Revision        uint64                    `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
-	RefEmailAddress map[string][]*User        `json:"-" xml:"-" yaml:"-"`
+	RefEmailAddress map[string]*User          `json:"-" xml:"-" yaml:"-"`
 	RefUsername     map[string]*User          `json:"-" xml:"-" yaml:"-"`
 	RefID           map[string]*User          `json:"-" xml:"-" yaml:"-"`
 	Users           []*User                   `json:"users,omitempty" xml:"users,omitempty" yaml:"users,omitempty"`
@@ -49,7 +49,7 @@ func NewDatabase() *Database {
 		Revision:        1,
 		RefUsername:     make(map[string]*User),
 		RefID:           make(map[string]*User),
-		RefEmailAddress: make(map[string][]*User),
+		RefEmailAddress: make(map[string]*User),
 		Users:           []*User{},
 	}
 	return db
@@ -60,6 +60,8 @@ func (db *Database) AddUser(user *User) error {
 	if err := user.Valid(); err != nil {
 		return fmt.Errorf("invalid user, %s", err)
 	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	for i := 0; i < 10; i++ {
 		id := NewID()
 		if _, exists := db.RefID[id]; !exists {
@@ -68,16 +70,25 @@ func (db *Database) AddUser(user *User) error {
 		}
 	}
 	username := strings.ToLower(user.Username)
-	db.RefUsername[username] = user
-	db.RefID[user.ID] = user
+	if _, exists := db.RefUsername[username]; exists {
+		return fmt.Errorf("username already exists")
+	}
+
+	emailAddresses := []string{}
 	if len(user.EmailAddresses) > 0 {
 		for _, email := range user.EmailAddresses {
 			emailAddress := strings.ToLower(email.Address)
-			if _, exists := db.RefEmailAddress[emailAddress]; !exists {
-				db.RefEmailAddress[emailAddress] = []*User{}
+			if _, exists := db.RefEmailAddress[emailAddress]; exists {
+				return fmt.Errorf("email address already associated with another user")
 			}
-			db.RefEmailAddress[emailAddress] = append(db.RefEmailAddress[emailAddress], user)
+			emailAddresses = append(emailAddresses, emailAddress)
 		}
+	}
+
+	db.RefUsername[username] = user
+	db.RefID[user.ID] = user
+	for _, emailAddress := range emailAddresses {
+		db.RefEmailAddress[emailAddress] = user
 	}
 	db.Users = append(db.Users, user)
 	return nil
@@ -139,7 +150,11 @@ func (db *Database) GetUserByUsername(s string) (*User, error) {
 func (db *Database) GetUserByEmailAddress(s string) (*User, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
-	return nil, fmt.Errorf("not supported")
+	email := strings.ToLower(s)
+	if user, exists := db.RefEmailAddress[email]; exists {
+		return user, nil
+	}
+	return nil, fmt.Errorf("not found")
 }
 
 // SaveToFile saves database contents to JSON file.
@@ -187,10 +202,10 @@ func (db *Database) LoadFromFile(fp string) error {
 			if len(user.EmailAddresses) > 0 {
 				for _, email := range user.EmailAddresses {
 					emailAddress := strings.ToLower(email.Address)
-					if _, exists := db.RefEmailAddress[emailAddress]; !exists {
-						db.RefEmailAddress[emailAddress] = []*User{}
+					if _, exists := db.RefEmailAddress[emailAddress]; exists {
+						return fmt.Errorf("duplicate email address: %s %v", emailAddress, user)
 					}
-					db.RefEmailAddress[emailAddress] = append(db.RefEmailAddress[emailAddress], user)
+					db.RefEmailAddress[emailAddress] = user
 				}
 			}
 		}
