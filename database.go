@@ -32,23 +32,25 @@ func init() {
 
 // Database is user identity database.
 type Database struct {
-	mu          *sync.RWMutex             `json:"-" xml:"-" yaml:"-"`
-	Info        *versioned.PackageManager `json:"-" xml:"-" yaml:"-"`
-	Revision    uint64                    `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
-	RefUsername map[string]*User          `json:"-" xml:"-" yaml:"-"`
-	RefID       map[string]*User          `json:"-" xml:"-" yaml:"-"`
-	Users       []*User                   `json:"users,omitempty" xml:"users,omitempty" yaml:"users,omitempty"`
+	mu              *sync.RWMutex             `json:"-" xml:"-" yaml:"-"`
+	Info            *versioned.PackageManager `json:"-" xml:"-" yaml:"-"`
+	Revision        uint64                    `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
+	RefEmailAddress map[string][]*User        `json:"-" xml:"-" yaml:"-"`
+	RefUsername     map[string]*User          `json:"-" xml:"-" yaml:"-"`
+	RefID           map[string]*User          `json:"-" xml:"-" yaml:"-"`
+	Users           []*User                   `json:"users,omitempty" xml:"users,omitempty" yaml:"users,omitempty"`
 }
 
 // NewDatabase return an instance of Database.
 func NewDatabase() *Database {
 	db := &Database{
-		mu:          &sync.RWMutex{},
-		Info:        app,
-		Revision:    1,
-		RefUsername: make(map[string]*User),
-		RefID:       make(map[string]*User),
-		Users:       []*User{},
+		mu:              &sync.RWMutex{},
+		Info:            app,
+		Revision:        1,
+		RefUsername:     make(map[string]*User),
+		RefID:           make(map[string]*User),
+		RefEmailAddress: make(map[string][]*User),
+		Users:           []*User{},
 	}
 	return db
 }
@@ -68,6 +70,15 @@ func (db *Database) AddUser(user *User) error {
 	username := strings.ToLower(user.Username)
 	db.RefUsername[username] = user
 	db.RefID[user.ID] = user
+	if len(user.EmailAddresses) > 0 {
+		for _, email := range user.EmailAddresses {
+			emailAddress := strings.ToLower(email.Address)
+			if _, exists := db.RefEmailAddress[emailAddress]; !exists {
+				db.RefEmailAddress[emailAddress] = []*User{}
+			}
+			db.RefEmailAddress[emailAddress] = append(db.RefEmailAddress[emailAddress], user)
+		}
+	}
 	db.Users = append(db.Users, user)
 	return nil
 }
@@ -101,16 +112,21 @@ func (db *Database) AuthenticateUser(username, password string) (map[string]inte
 	return userMap, true, nil
 }
 
-// getUserByID returns a user by id
-func (db *Database) getUserByID(s string) (*User, error) {
-	if user, exists := db.RefID[s]; exists {
+// GetUserByID returns a user by id
+func (db *Database) GetUserByID(s string) (*User, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	userID := strings.ToLower(s)
+	if user, exists := db.RefID[userID]; exists {
 		return user, nil
 	}
 	return nil, fmt.Errorf("not found")
 }
 
-// getUserByUsername returns a user by username
-func (db *Database) getUserByUsername(s string) (*User, error) {
+// GetUserByUsername returns a user by username
+func (db *Database) GetUserByUsername(s string) (*User, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 	username := strings.ToLower(s)
 	if user, exists := db.RefUsername[username]; exists {
 		return user, nil
@@ -118,9 +134,11 @@ func (db *Database) getUserByUsername(s string) (*User, error) {
 	return nil, fmt.Errorf("not found")
 }
 
-// getUserByEmailAddress returns a liast of users associated with a specific email
+// GetUserByEmailAddress returns a liast of users associated with a specific email
 // address.
-func (db *Database) getUserByEmailAddress(s string) (*User, error) {
+func (db *Database) GetUserByEmailAddress(s string) (*User, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 	return nil, fmt.Errorf("not supported")
 }
 
@@ -166,6 +184,15 @@ func (db *Database) LoadFromFile(fp string) error {
 			}
 			db.RefUsername[username] = user
 			db.RefID[user.ID] = user
+			if len(user.EmailAddresses) > 0 {
+				for _, email := range user.EmailAddresses {
+					emailAddress := strings.ToLower(email.Address)
+					if _, exists := db.RefEmailAddress[emailAddress]; !exists {
+						db.RefEmailAddress[emailAddress] = []*User{}
+					}
+					db.RefEmailAddress[emailAddress] = append(db.RefEmailAddress[emailAddress], user)
+				}
+			}
 		}
 	}
 	return nil
