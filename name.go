@@ -1,5 +1,9 @@
 package identity
 
+import (
+	"fmt"
+)
+
 // Name represents human name
 type Name struct {
 	First     string `json:"first,omitempty" xml:"first,omitempty" yaml:"first,omitempty"`
@@ -21,7 +25,15 @@ func NewName() *Name {
 // GetNameClaim returns name field of a claim.
 func (n *Name) GetNameClaim() string {
 	if n.First != "" && n.Last != "" {
-		return n.First + " " + n.Last
+		return fmt.Sprintf("%s, %s", n.Last, n.First)
+	}
+	return ""
+}
+
+// GetFullName returns the primary full name for User.
+func (n *Name) GetFullName() string {
+	if n.First != "" && n.Last != "" {
+		return fmt.Sprintf("%s, %s", n.Last, n.First)
 	}
 	return ""
 }

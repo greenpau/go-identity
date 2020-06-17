@@ -2,8 +2,18 @@
   "revision": 1,
   "users": [
     {
-      "id": "876ca6ea-b78e-46af-9c4a-9d0c1d994b31",
+      "id": "68c2a063-a712-49e4-80b5-2678bd8e4019",
       "username": "jsmith",
+      "name": {
+        "first": "John",
+        "last": "Smith"
+      },
+      "names": [
+        {
+          "first": "John",
+          "last": "Smith"
+        }
+      ],
       "email_addresses": [
         {
           "address": "jsmith@gmail.com",
@@ -14,15 +24,26 @@
         {
           "purpose": "generic",
           "type": "bcrypt",
-          "hash": "$2a$10$VglI57CRnxyGS3qpz2K6geLczyYJLwjzsHiu0ihqHbGvHmc1LepXG",
+          "hash": "$2a$10$3YDkYXIOIVK9G5AZ4ltwJ.h43Ohu9axmkQ3MmizJ2gy7NnjfaZeRm",
           "cost": 10,
           "expired_at": "0001-01-01T00:00:00Z",
-          "created_at": "2020-05-05T01:40:07.932320017Z",
+          "created_at": "2020-06-17T18:38:18.539830682Z",
           "disabled_at": "0001-01-01T00:00:00Z"
         }
       ],
-      "created": "2020-05-05T01:40:07.9322976Z",
-      "last_modified": "2020-05-05T01:40:07.932297713Z"
+      "created": "2020-06-17T18:38:18.539817892Z",
+      "last_modified": "2020-06-17T18:38:18.539817962Z",
+      "roles": [
+        {
+          "name": "viewer"
+        },
+        {
+          "name": "editor"
+        },
+        {
+          "name": "admin"
+        }
+      ]
     }
   ]
 }

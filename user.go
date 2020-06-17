@@ -193,3 +193,27 @@ func (user *User) GetRolesClaim() string {
 	}
 	return strings.Join(roles, " ")
 }
+
+// GetFullName returns the primary full name for a user.
+func (user *User) GetFullName() string {
+	if user.Name == nil {
+		return ""
+	}
+	return user.Name.GetFullName()
+}
+
+// AddName adds Name for a user identity.
+func (user *User) AddName(name *Name) error {
+	if len(user.Names) == 0 {
+		user.Name = name
+		user.Names = append(user.Names, name)
+		return nil
+	}
+	for _, n := range user.Names {
+		if name.GetFullName() == n.GetFullName() {
+			return nil
+		}
+	}
+	user.Names = append(user.Names, name)
+	return nil
+}
