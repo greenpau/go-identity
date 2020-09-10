@@ -23,9 +23,9 @@ func init() {
 	app = versioned.NewPackageManager("go-identity")
 	app.Description = "go-identity"
 	app.Documentation = "https://github.com/greenpau/go-identity"
-	app.SetVersion(appVersion, "1.0.0")
+	app.SetVersion(appVersion, "1.0.4")
 	app.SetGitBranch(gitBranch, "master")
-	app.SetGitCommit(gitCommit, "v1.0.0")
+	app.SetGitCommit(gitCommit, "v1.0.4")
 	app.SetBuildUser(buildUser, "")
 	app.SetBuildDate(buildDate, "")
 }
@@ -157,6 +157,11 @@ func (db *Database) GetUserByEmailAddress(s string) (*User, error) {
 	return nil, fmt.Errorf("not found")
 }
 
+// GetUserCount returns user count.
+func (db *Database) GetUserCount() int {
+	return len(db.Users)
+}
+
 // SaveToFile saves database contents to JSON file.
 func (db *Database) SaveToFile(fp string) error {
 	db.mu.Lock()
@@ -180,35 +185,43 @@ func (db *Database) LoadFromFile(fp string) error {
 	if err != nil {
 		return err
 	}
-	err = json.Unmarshal(content, db)
+
+	tdb := NewDatabase()
+	err = json.Unmarshal(content, tdb)
 	if err != nil {
 		return err
 	}
 
-	if len(db.Users) > 0 {
-		for _, user := range db.Users {
+	if len(tdb.Users) > 0 {
+		for _, user := range tdb.Users {
 			if err := user.Valid(); err != nil {
 				return fmt.Errorf("invalid user %v, %s", user, err)
 			}
 			username := strings.ToLower(user.Username)
-			if _, exists := db.RefUsername[username]; exists {
+			if _, exists := tdb.RefUsername[username]; exists {
 				return fmt.Errorf("duplicate username %s %v", user.Username, user)
 			}
-			if _, exists := db.RefID[user.ID]; exists {
+			if _, exists := tdb.RefID[user.ID]; exists {
 				return fmt.Errorf("duplicate user id: %s %v", user.ID, user)
 			}
-			db.RefUsername[username] = user
-			db.RefID[user.ID] = user
+			tdb.RefUsername[username] = user
+			tdb.RefID[user.ID] = user
 			if len(user.EmailAddresses) > 0 {
 				for _, email := range user.EmailAddresses {
 					emailAddress := strings.ToLower(email.Address)
-					if _, exists := db.RefEmailAddress[emailAddress]; exists {
+					if _, exists := tdb.RefEmailAddress[emailAddress]; exists {
 						return fmt.Errorf("duplicate email address: %s %v", emailAddress, user)
 					}
-					db.RefEmailAddress[emailAddress] = user
+					tdb.RefEmailAddress[emailAddress] = user
 				}
 			}
 		}
 	}
+
+	db.Revision = tdb.Revision
+	db.RefUsername = tdb.RefUsername
+	db.RefID = tdb.RefID
+	db.RefEmailAddress = tdb.RefEmailAddress
+	db.Users = tdb.Users
 	return nil
 }

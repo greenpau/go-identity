@@ -77,13 +77,38 @@ func TestNewDatabase(t *testing.T) {
 }
 
 func TestLoadDatabase(t *testing.T) {
+	expectedUserCount := 1
 	dbPath := "assets/tests/userdb.json"
 	dbCopyPath := "assets/tests/userdb_copy.json"
 	db := NewDatabase()
 	if err := db.LoadFromFile(dbPath); err != nil {
 		t.Fatalf("failed loading database at %s: %s", dbPath, err)
 	}
+
+	actualUserCount := db.GetUserCount()
+	if expectedUserCount != actualUserCount {
+		t.Fatalf(
+			"unexpected database user count at %s: %d (expected) vs. %d (actual)",
+			dbPath, expectedUserCount, actualUserCount,
+		)
+	}
+
 	if err := db.SaveToFile(dbCopyPath); err != nil {
 		t.Fatalf("error saving database at %s: %s", dbCopyPath, err)
+	}
+
+	if err := db.LoadFromFile(dbPath); err != nil {
+		t.Fatalf("failed loading database at %s: %s", dbPath, err)
+	}
+	if err := db.SaveToFile(dbCopyPath); err != nil {
+		t.Fatalf("error saving database at %s: %s", dbCopyPath, err)
+	}
+
+	actualUserCount = db.GetUserCount()
+	if expectedUserCount != actualUserCount {
+		t.Fatalf(
+			"unexpected database user count at %s: %d (expected) vs. %d (actual)",
+			dbPath, expectedUserCount, actualUserCount,
+		)
 	}
 }

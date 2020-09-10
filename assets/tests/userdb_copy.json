@@ -2,7 +2,7 @@
   "revision": 1,
   "users": [
     {
-      "id": "68c2a063-a712-49e4-80b5-2678bd8e4019",
+      "id": "a0d04cca-d4f0-427b-b07a-91b36c5ca0ed",
       "username": "jsmith",
       "name": {
         "first": "John",
@@ -24,15 +24,15 @@
         {
           "purpose": "generic",
           "type": "bcrypt",
-          "hash": "$2a$10$3YDkYXIOIVK9G5AZ4ltwJ.h43Ohu9axmkQ3MmizJ2gy7NnjfaZeRm",
+          "hash": "$2a$10$SINSZSeb/xSqX.SI0lny2.KlIDBodWZyp4HRfAz0jLWTIU/UA7MPK",
           "cost": 10,
           "expired_at": "0001-01-01T00:00:00Z",
-          "created_at": "2020-06-17T18:38:18.539830682Z",
+          "created_at": "2020-09-10T16:32:28.619971811Z",
           "disabled_at": "0001-01-01T00:00:00Z"
         }
       ],
-      "created": "2020-06-17T18:38:18.539817892Z",
-      "last_modified": "2020-06-17T18:38:18.539817962Z",
+      "created": "2020-09-10T16:32:28.619962141Z",
+      "last_modified": "2020-09-10T16:32:28.619962281Z",
       "roles": [
         {
           "name": "viewer"

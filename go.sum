@@ -1,5 +1,5 @@
-github.com/greenpau/versioned v1.0.18 h1:R6Vwm9j97CVife4KESf4xdbViUwrjNCLr1hWFfbeVUY=
-github.com/greenpau/versioned v1.0.18/go.mod h1:rtFCvaWWNbMH4CJnje/xicgmrM63j++rUh5juSu0k/A=
+github.com/greenpau/versioned v1.0.23 h1:ICqCoTG8Xv92BV+bKs52d86pDF/e0zhk3LLELsYMpl4=
+github.com/greenpau/versioned v1.0.23/go.mod h1:rtFCvaWWNbMH4CJnje/xicgmrM63j++rUh5juSu0k/A=
 github.com/iancoleman/strcase v0.0.0-20191112232945-16388991a334 h1:VHgatEHNcBFEB7inlalqfNqw65aNkM1lGX2yt3NmbS8=
 github.com/iancoleman/strcase v0.0.0-20191112232945-16388991a334/go.mod h1:SK73tn/9oHe+/Y0h39VT4UCxmurVJkR5NA7kMEAOgSE=
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=

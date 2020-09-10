@@ -1,4 +1,4 @@
-.PHONY: test ctest covdir coverage docs linter qtest clean dep release
+.PHONY: test ctest covdir coverage docs linter qtest clean dep release logo
 APP_VERSION:=$(shell cat VERSION | head -1)
 GIT_COMMIT:=$(shell git describe --dirty --always)
 GIT_BRANCH:=$(shell git rev-parse --abbrev-ref HEAD -- | head -1)
@@ -58,14 +58,27 @@ dep:
 
 release:
 	@echo "Making release"
+	@go mod tidy
+	@go mod verify
 	@if [ $(GIT_BRANCH) != "master" ]; then echo "cannot release to non-master branch $(GIT_BRANCH)" && false; fi
 	@git diff-index --quiet HEAD -- || ( echo "git directory is dirty, commit changes first" && false )
 	@versioned -patch
 	@echo "Patched version"
 	@git add VERSION
+	@git commit -m 'updated VERSION file'
+	@versioned -sync database.go
+	@git add database.go
 	@git commit -m "released v`cat VERSION | head -1`"
 	@git tag -a v`cat VERSION | head -1` -m "v`cat VERSION | head -1`"
 	@git push
 	@echo "git push --delete origin v$(APP_VERSION)"
 	@echo "git tag --delete v$(APP_VERSION)"
 	@echo "git push --tags"
+
+logo:
+	@mkdir -p assets/docs/images/
+	@gm convert -background black -font Bookman-Demi \
+		-size 640x320 "xc:black" \
+		-draw "fill white gravity center text 0,0 'Go\nidentity'" \
+		-pointsize 96 \
+		assets/docs/images/logo.png
