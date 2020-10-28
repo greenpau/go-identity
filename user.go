@@ -63,13 +63,20 @@ func (user *User) AddPassword(s string) error {
 		user.Passwords = append(user.Passwords, password)
 		return nil
 	}
+	var shrink bool
 	for i, p := range user.Passwords {
-		if password.Purpose == p.Purpose {
-			user.Passwords[i] = password
-			return nil
+		if !p.Disabled {
+			p.Disable()
 		}
+		if i > 9 {
+			shrink = true
+		}
+
 	}
-	user.Passwords = append(user.Passwords, password)
+	if shrink {
+		user.Passwords = user.Passwords[:8]
+	}
+	user.Passwords = append([]*Password{password}, user.Passwords...)
 	return nil
 }
 
@@ -151,6 +158,9 @@ func (user *User) VerifyPassword(s string) error {
 		return fmt.Errorf("user has no passwords")
 	}
 	for _, p := range user.Passwords {
+		if p.Disabled || p.Expired {
+			continue
+		}
 		if p.Match(s) {
 			return nil
 		}

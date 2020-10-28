@@ -38,6 +38,14 @@ func NewPassword(s string) (*Password, error) {
 	return p, nil
 }
 
+// Disable disables Password instance.
+func (p *Password) Disable() {
+	p.Expired = true
+	p.ExpiredAt = time.Now().UTC()
+	p.Disabled = true
+	p.DisabledAt = time.Now().UTC()
+}
+
 // HashPassword hashes plain text password. The default hashing method
 // is bctypt with cost 10.
 func (p *Password) hashPassword(s string) error {

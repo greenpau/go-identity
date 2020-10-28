@@ -22,7 +22,10 @@ func TestNewDatabase(t *testing.T) {
 
 	user := NewUser("jsmith")
 	email := "jsmith@gmail.com"
-	password := "jsmith123"
+	//password := "jsmith123"
+	//newPassword := "johnsmith123"
+	password := NewRandomString(12)
+	newPassword := NewRandomString(16)
 	name := &Name{
 		First: "John",
 		Last:  "Smith",
@@ -74,6 +77,43 @@ func TestNewDatabase(t *testing.T) {
 		)
 	}
 	t.Logf("User claims: %v", claims)
+
+	prevPassword := password
+	for i := 0; i < 15; i++ {
+		if i != 0 {
+			prevPassword = newPassword
+		}
+		newPassword = NewRandomString(16)
+		reqOpts := make(map[string]interface{})
+		reqOpts["username"] = user.Username
+		reqOpts["email"] = email
+		reqOpts["current_password"] = prevPassword
+		reqOpts["new_password"] = newPassword
+		reqOpts["file_path"] = dbPath
+		if err := db.ChangeUserPassword(reqOpts); err != nil {
+			t.Fatalf("error changing user password: %s, request options: %v", err, reqOpts)
+		}
+		t.Logf("User password has changed")
+	}
+
+	if _, authed, _ := db.AuthenticateUser(user.Username, prevPassword); authed {
+		t.Fatalf("expected authentication failure, but got success")
+	}
+
+	claims, authed, err = db.AuthenticateUser(user.Username, newPassword)
+	if !authed {
+		t.Fatalf("expected authentication success, but got failure: %s", err)
+	}
+	t.Logf("User claims: %v", claims)
+
+	dbUser, err := db.GetUserByUsername(user.Username)
+	if err != nil {
+		t.Fatalf("expected valid user, got error: %s", err)
+	}
+	expectedPasswordCount := 10
+	if len(dbUser.Passwords) != expectedPasswordCount {
+		t.Fatalf("expected password count of %d, received %d", expectedPasswordCount, len(dbUser.Passwords))
+	}
 }
 
 func TestLoadDatabase(t *testing.T) {

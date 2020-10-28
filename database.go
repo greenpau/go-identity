@@ -225,3 +225,51 @@ func (db *Database) LoadFromFile(fp string) error {
 	db.Users = tdb.Users
 	return nil
 }
+
+// ChangeUserPassword  change user password.
+func (db *Database) ChangeUserPassword(opts map[string]interface{}) error {
+	var username, email, currentPassword, newPassword, fp string
+	for _, k := range []string{"username", "email", "current_password", "new_password", "file_path"} {
+		if _, exists := opts[k]; !exists {
+			return fmt.Errorf("Password change required %s input field", k)
+		}
+		switch k {
+		case "username":
+			username = opts[k].(string)
+		case "email":
+			email = opts[k].(string)
+		case "current_password":
+			currentPassword = opts[k].(string)
+		case "new_password":
+			newPassword = opts[k].(string)
+		case "file_path":
+			fp = opts[k].(string)
+		}
+	}
+
+	user1, err := db.GetUserByUsername(username)
+	if err != nil {
+		return err
+	}
+	user2, err := db.GetUserByEmailAddress(email)
+	if err != nil {
+		return err
+	}
+	if user1.ID != user2.ID {
+		return fmt.Errorf("username and email point to a different identity")
+	}
+
+	if err := user1.VerifyPassword(currentPassword); err != nil {
+		return fmt.Errorf("current password is not valid, %s", err)
+	}
+
+	if err := user1.AddPassword(newPassword); err != nil {
+		return fmt.Errorf("failed setting new password, %s", err)
+	}
+
+	if err := db.SaveToFile(fp); err != nil {
+		return fmt.Errorf("failed to commit new password, %s", err)
+	}
+
+	return nil
+}
