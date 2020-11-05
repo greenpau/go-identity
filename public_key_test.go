@@ -15,20 +15,24 @@
 package identity
 
 import (
-	"github.com/greenpau/go-identity/internal/utils"
 	"testing"
 )
 
-func TestNewHandle(t *testing.T) {
+func TestNewPublicKey(t *testing.T) {
 	var testFailed int
-	handle := NewHandle()
-	complianceMessages, compliant := utils.GetTagCompliance(handle)
-	if !compliant {
-		testFailed++
+
+	pubkeyOpts := make(map[string]interface{})
+	pubkeyOpts["type"] = "rsa"
+	pubkeyOpts["payload"] = "foobar"
+
+	pubkey, err := NewPublicKey(pubkeyOpts)
+	if err != nil {
+		t.Fatalf("failed creating a public key: %s", err)
 	}
-	for _, entry := range complianceMessages {
-		t.Logf("%s", entry)
-	}
+
+	t.Logf("PublicKey Type: %s", pubkey.Type)
+	t.Logf("PublicKey Fingerprint: %s", pubkey.Fingerprint)
+
 	if testFailed > 0 {
 		t.Fatalf("encountered %d errors", testFailed)
 	}

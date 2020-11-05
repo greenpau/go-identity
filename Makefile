@@ -1,4 +1,4 @@
-.PHONY: test ctest covdir coverage docs linter qtest clean dep release logo
+.PHONY: test ctest covdir coverage docs linter qtest clean dep release logo license
 APP_VERSION:=$(shell cat VERSION | head -1)
 GIT_COMMIT:=$(shell git describe --dirty --always)
 GIT_BRANCH:=$(shell git rev-parse --abbrev-ref HEAD -- | head -1)
@@ -50,11 +50,18 @@ clean:
 qtest:
 	@echo "Perform quick tests ..."
 	@#go test -v -run TestVersioned *.go
-	@go test -v -run TestNewID *.go
+	@#go test -v -run TestNewID *.go
+	@time richgo test -v -run TestNewPublicKey *.go
 
 dep:
 	@echo "Making dependencies check ..."
 	@go get -u golang.org/x/lint/golint
+	@go get -u github.com/greenpau/versioned/cmd/versioned
+	@go get -u github.com/google/addlicense
+	@go get -u github.com/kyoh86/richgo
+
+license:
+	@addlicense -c "Paul Greenberg greenpau@outlook.com" -y 2020 ./*.go
 
 release:
 	@echo "Making release"

@@ -1,3 +1,17 @@
+// Copyright 2020 Paul Greenberg greenpau@outlook.com
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package identity
 
 import (
@@ -19,6 +33,7 @@ type User struct {
 	StreetAddress  []*Location           `json:"street_address,omitempty" xml:"street_address,omitempty" yaml:"street_address,omitempty"`
 	EmailAddresses []*EmailAddress       `json:"email_addresses,omitempty" xml:"email_addresses,omitempty" yaml:"email_addresses,omitempty"`
 	Passwords      []*Password           `json:"passwords,omitempty" xml:"passwords,omitempty" yaml:"passwords,omitempty"`
+	PublicKeys     []*PublicKey          `json:"public_keys,omitempty" xml:"public_keys,omitempty" yaml:"public_keys,omitempty"`
 	Mfa            *MultiFactorAuthState `json:"mfa,omitempty" xml:"mfa,omitempty" yaml:"mfa,omitempty"`
 	Lockout        *LockoutState         `json:"lockout,omitempty" xml:"lockout,omitempty" yaml:"lockout,omitempty"`
 	Avatar         *Image                `json:"avatar,omitempty" xml:"avatar,omitempty" yaml:"avatar,omitempty"`
