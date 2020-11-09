@@ -241,7 +241,7 @@ func (db *Database) LoadFromFile(fp string) error {
 }
 
 // AddUserSSHKey adds public SSH key to a user.
-func AddUserSSHKey(opts map[string]interface{}) error {
+func (db *Database) AddUserSSHKey(opts map[string]interface{}) error {
 	return nil
 }
 
