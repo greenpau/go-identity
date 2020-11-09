@@ -47,6 +47,7 @@ func NewPublicKey(opts map[string]interface{}) (*PublicKey, error) {
 			return nil, fmt.Errorf("argument %s not found", k)
 		}
 	}
+
 	p := &PublicKey{
 		Type:      opts["type"].(string),
 		Payload:   opts["payload"].(string),

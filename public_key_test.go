@@ -23,7 +23,7 @@ func TestNewPublicKey(t *testing.T) {
 
 	pubkeyOpts := make(map[string]interface{})
 	pubkeyOpts["type"] = "rsa"
-	pubkeyOpts["payload"] = "foobar"
+	pubkeyOpts["payload"] = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDCchPls/+kEJ7D4ZI6yel6L0smcIfNvhA6YaOTaUX/5AvrdUXe/0mKJ2UTeKSNmkaZEfAetJREkxdVl5s0AoKGYcGcdX0IvdKSArfOEZ0WkPNmc63MlcCeRJLmdZbADN8/XZl47ca/xpvXnKEVN6Fn/TuAhjM3XO+WdHnY0SKgc2hT7Eqov0Yht6N2vULkmSWw2knNKYTmr0bBLJVrZjhDrWQH2UGmvAUZR5pzkuhRqtGdJMfaPe/Api4zkoKLpxQfxpUIPEKSkIaHWpXMxPuAgj7hY1eyos3N4SiyoJTW1DxEuz9dlTsAnOsijnp1zhna5RI/VQae6SFnfGdF99qlb0ydpG5h9iVMyjHGQolXtw3oLBbXwDkzQaZvQ3ESlyj72GSvdu7I2T2KHKqe/W9jvndxApYuFHgD636Iu0P3yHrBsUfHwMJeX7BkciZp5Unb6LehLbhT7M5Z0fX8S0YhFEJVcJBmnjWPmOVHoHlkJCd7SakMWtovTWweWEWghmeov+3lCONWFTqI5+O9Ciybcld8qP7oFSRAhGgUJMYu/OmaNlJAcC7ThlO9PhJAIGFQcwsaWnJk0Mx5ExJVthQn7BhM2GCGw1ikBOAeYd3nQans0uH5/SQlvrf3xIrxPAWBTezGERxDN1GRPT2agI6BKu+E5uYgHIoQBQFyYSOXjw== jsmith@contoso.com"
 
 	pubkey, err := NewPublicKey(pubkeyOpts)
 	if err != nil {
