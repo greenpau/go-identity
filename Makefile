@@ -78,9 +78,9 @@ release:
 	@git commit -m "released v`cat VERSION | head -1`"
 	@git tag -a v`cat VERSION | head -1` -m "v`cat VERSION | head -1`"
 	@git push
-	@echo "git push --delete origin v$(APP_VERSION)"
-	@echo "git tag --delete v$(APP_VERSION)"
-	@echo "git push --tags"
+	@git push --tags
+	@#echo "git push --delete origin v$(APP_VERSION)"
+	@#echo "git tag --delete v$(APP_VERSION)"
 
 logo:
 	@mkdir -p assets/docs/images/
