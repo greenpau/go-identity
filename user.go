@@ -255,6 +255,16 @@ func (user *User) AddSSHKey(payload, comment string) error {
 	if err != nil {
 		return fmt.Errorf("Failed adding a public key: %s", err)
 	}
+
+	for _, k := range user.PublicKeys {
+		if k.Type != pubkey.Type {
+			continue
+		}
+		if k.Fingerprint != pubkey.Fingerprint {
+			continue
+		}
+		return fmt.Errorf("Failed adding a public key: already exists")
+	}
 	user.PublicKeys = append(user.PublicKeys, pubkey)
 	return nil
 }
