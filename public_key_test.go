@@ -103,6 +103,7 @@ func TestNewPublicKey(t *testing.T) {
 			testFailed++
 			continue
 		}
+		t.Logf("key %d id: %s", i, pubkey.ID)
 		t.Logf("key %d usage: %s", i, pubkey.Usage)
 		t.Logf("key %d type: %s", i, pubkey.Type)
 		t.Logf("key %d fingerprint: %s, %s", i, pubkey.Fingerprint, pubkey.FingerprintMD5)
@@ -116,6 +117,7 @@ func TestNewPublicKey(t *testing.T) {
 			testFailed++
 			continue
 		}
+		t.Logf("key %d id: %s", i, authkey.ID)
 		t.Logf("key %d usage: %s", i, authkey.Usage)
 		t.Logf("key %d type: %s", i, authkey.Type)
 		t.Logf("key %d fingerprint: %s, %s", i, authkey.Fingerprint, authkey.FingerprintMD5)

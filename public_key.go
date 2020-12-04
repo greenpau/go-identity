@@ -32,6 +32,7 @@ var supportedPublicKeyTypes = map[string]bool{
 
 // PublicKey is a puiblic key in a public-private key pair.
 type PublicKey struct {
+	ID    string `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
 	Usage string `json:"usage,omitempty" xml:"usage,omitempty" yaml:"usage,omitempty"`
 	// Type is any of the following: dsa, rsa, ecdsa, ed25519
 	Type           string    `json:"type,omitempty" xml:"type,omitempty" yaml:"type,omitempty"`
@@ -57,6 +58,7 @@ func NewPublicKey(opts map[string]interface{}) (*PublicKey, error) {
 		}
 	}
 	p := &PublicKey{
+		ID:        GetRandomString(40),
 		Payload:   opts["payload"].(string),
 		Usage:     opts["usage"].(string),
 		CreatedAt: time.Now().UTC(),
