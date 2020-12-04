@@ -240,10 +240,10 @@ func (db *Database) LoadFromFile(fp string) error {
 	return nil
 }
 
-// AddUserSSHKey adds public SSH key to a user.
-func (db *Database) AddUserSSHKey(opts map[string]interface{}) error {
-	var username, email, payload, comment, fp string
-	for _, k := range []string{"username", "email", "key", "file_path"} {
+// AddPublicKey adds public key, e.g. GPG or SSH, for a user.
+func (db *Database) AddPublicKey(opts map[string]interface{}) error {
+	var username, email, payload, keyUsage, comment, fp string
+	for _, k := range []string{"username", "email", "key", "key_usage", "file_path"} {
 		if _, exists := opts[k]; !exists {
 			return fmt.Errorf("Password change required %s input field", k)
 		}
@@ -256,6 +256,8 @@ func (db *Database) AddUserSSHKey(opts map[string]interface{}) error {
 			payload = opts[k].(string)
 		case "file_path":
 			fp = opts[k].(string)
+		case "key_usage":
+			keyUsage = opts[k].(string)
 		}
 	}
 	if v, exists := opts["comment"]; exists {
@@ -272,13 +274,52 @@ func (db *Database) AddUserSSHKey(opts map[string]interface{}) error {
 	if user1.ID != user2.ID {
 		return fmt.Errorf("username and email point to a different identity")
 	}
-	if err := user1.AddSSHKey(payload, comment); err != nil {
+
+	if err := user1.AddPublicKey(keyUsage, payload, comment); err != nil {
 		return fmt.Errorf("failed adding ssh key, %s", err)
 	}
 	if err := db.SaveToFile(fp); err != nil {
 		return fmt.Errorf("failed to commit newly added ssh key, %s", err)
 	}
 	return nil
+}
+
+// GetPublicKeys returns a list of public keys associated with a user.
+func (db *Database) GetPublicKeys(opts map[string]interface{}) ([]*PublicKey, error) {
+	var username, email, keyUsage string
+	for _, k := range []string{"username", "email", "key_usage"} {
+		if _, exists := opts[k]; !exists {
+			return nil, fmt.Errorf("Password change required %s input field", k)
+		}
+		switch k {
+		case "username":
+			username = opts[k].(string)
+		case "email":
+			email = opts[k].(string)
+		case "key_usage":
+			keyUsage = opts[k].(string)
+		}
+	}
+	user1, err := db.GetUserByUsername(username)
+	if err != nil {
+		return nil, err
+	}
+	user2, err := db.GetUserByEmailAddress(email)
+	if err != nil {
+		return nil, err
+	}
+	if user1.ID != user2.ID {
+		return nil, fmt.Errorf("username and email point to a different identity")
+	}
+
+	keys := []*PublicKey{}
+	for _, k := range user1.PublicKeys {
+		if k.Usage != keyUsage {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	return keys, nil
 }
 
 // ChangeUserPassword  change user password.

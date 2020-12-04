@@ -243,10 +243,10 @@ func (user *User) AddName(name *Name) error {
 	return nil
 }
 
-// AddSSHKey adds public SSH key to a user identity.
-func (user *User) AddSSHKey(payload, comment string) error {
+// AddPublicKey adds public key, e.g. GPG or SSH, to a user identity.
+func (user *User) AddPublicKey(keyUsage, payload, comment string) error {
 	pubkeyOpts := make(map[string]interface{})
-	pubkeyOpts["usage"] = "ssh"
+	pubkeyOpts["usage"] = keyUsage
 	pubkeyOpts["payload"] = payload
 	if comment != "" {
 		pubkeyOpts["comment"] = comment

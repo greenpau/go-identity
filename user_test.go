@@ -58,9 +58,10 @@ func TestNewUser(t *testing.T) {
 		t.Fatalf("added %s role, but the user has no %s role", roleName, roleName)
 	}
 
+	keyUsage := "ssh"
 	keyPayload := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDnnPNq40sWtv6WsG4cICs3Cb0C9EIeKbccOTVFk4/Ptl5oEMWHaH/e5OYAfhPsr66jC3SxCynlViXvc5+r7r9Tj1M7WGSIomZQr7c2gwyPRwT+/UBEtPi63LIAubb9rkdnZEmxU3hxdnMzeBovFLuEMZpmL5sce+sZNMMBybGP9UCRZaJhyYxy0jEJI9hlg4jRK30vkzPzsO+DNIqdAv3PNkhUqJABeMiXnxCCSQcb5S65zJPkGCRXKOlloFNt3ps9auWpJQgprrcxXFlSCvxu2UcdjegrmOMhohrxMl/VyMpbDWcyHolvZSko8uzM/G0UoR9UMrJN/AyXdzDrciqBG9EUT9NGPoA5sqWT6lt0cS7tG7tbAfV5XoN7QikwsWkDyaPfqV9EbLOkxBZCE9RdQTVtfX9MX7rBYz2MTItZ9WLIMmsPWe4RS31JhYhSiJqgGq0K8mHors5dfgMtiVaLUXG7hUpLRZ2qn29SkI0xIRiYUqLP1pV65EbJhy+1+2Vm2AgvdQrWrSofj6Dsw8IiyDtKx7ahgKnUbV3d4rtuo1hCikXu8rTlfUEXgR7kSdxaSb5uzqDLlKSe27szZxUvwsyGbTgQfLukyQZB9Kvxq6J70XMRG7UikKvyR0m/Eetp4B8RX5gvNqpd+SOl+dm+cGuqWT7UROygyf28cCqLzQ== jsmith@outlook.com"
 	keyComment := "jsmith@outlook.com"
-	if err := user.AddSSHKey(keyPayload, keyComment); err != nil {
+	if err := user.AddPublicKey(keyUsage, keyPayload, keyComment); err != nil {
 		t.Fatalf("error adding ssh key: %s", err)
 	}
 
