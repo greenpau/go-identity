@@ -65,4 +65,14 @@ func TestNewUser(t *testing.T) {
 		t.Fatalf("error adding ssh key: %s", err)
 	}
 
+	keyID := user.PublicKeys[0].ID
+	t.Logf("key id: %s", keyID)
+
+	if err := user.DeletePublicKey(keyID); err != nil {
+		t.Fatalf("error deleting ssh key: %s", err)
+	}
+
+	if len(user.PublicKeys) > 0 {
+		t.Fatalf("expected 0 public keys")
+	}
 }

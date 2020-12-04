@@ -276,10 +276,10 @@ func (db *Database) AddPublicKey(opts map[string]interface{}) error {
 	}
 
 	if err := user1.AddPublicKey(keyUsage, payload, comment); err != nil {
-		return fmt.Errorf("failed adding ssh key, %s", err)
+		return fmt.Errorf("failed adding public %s key, %s", keyUsage, err)
 	}
 	if err := db.SaveToFile(fp); err != nil {
-		return fmt.Errorf("failed to commit newly added ssh key, %s", err)
+		return fmt.Errorf("failed to commit newly added public %s key, %s", keyUsage, err)
 	}
 	return nil
 }
@@ -320,6 +320,46 @@ func (db *Database) GetPublicKeys(opts map[string]interface{}) ([]*PublicKey, er
 		keys = append(keys, k)
 	}
 	return keys, nil
+}
+
+// DeletePublicKey deletes a public key associated with a user by key id.
+func (db *Database) DeletePublicKey(opts map[string]interface{}) error {
+	var username, email, keyID, fp string
+	for _, k := range []string{"username", "email", "key_id", "file_path"} {
+		if _, exists := opts[k]; !exists {
+			return fmt.Errorf("Password change required %s input field", k)
+		}
+		switch k {
+		case "username":
+			username = opts[k].(string)
+		case "email":
+			email = opts[k].(string)
+		case "key_id":
+			keyID = opts[k].(string)
+		case "file_path":
+			fp = opts[k].(string)
+		}
+	}
+	user1, err := db.GetUserByUsername(username)
+	if err != nil {
+		return err
+	}
+	user2, err := db.GetUserByEmailAddress(email)
+	if err != nil {
+		return err
+	}
+	if user1.ID != user2.ID {
+		return fmt.Errorf("username and email point to a different identity")
+	}
+
+	if err := user1.DeletePublicKey(keyID); err != nil {
+		return err
+	}
+
+	if err := db.SaveToFile(fp); err != nil {
+		return fmt.Errorf("failed to commit removal of public key, %s", err)
+	}
+	return nil
 }
 
 // ChangeUserPassword  change user password.

@@ -268,3 +268,21 @@ func (user *User) AddPublicKey(keyUsage, payload, comment string) error {
 	user.PublicKeys = append(user.PublicKeys, pubkey)
 	return nil
 }
+
+// DeletePublicKey deletes a public key associated with a user.
+func (user *User) DeletePublicKey(keyID string) error {
+	var found bool
+	keys := []*PublicKey{}
+	for _, k := range user.PublicKeys {
+		if k.ID == keyID {
+			found = true
+			continue
+		}
+		keys = append(keys, k)
+	}
+	if !found {
+		return fmt.Errorf("key id not found")
+	}
+	user.PublicKeys = keys
+	return nil
+}
