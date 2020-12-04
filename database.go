@@ -243,11 +243,9 @@ func (db *Database) LoadFromFile(fp string) error {
 // AddUserSSHKey adds public SSH key to a user.
 func (db *Database) AddUserSSHKey(opts map[string]interface{}) error {
 	var username, email, payload, comment, fp string
-	for _, k := range []string{"username", "email", "key", "comment", "file_path"} {
+	for _, k := range []string{"username", "email", "key", "file_path"} {
 		if _, exists := opts[k]; !exists {
-			if k != "comment" {
-				return fmt.Errorf("Password change required %s input field", k)
-			}
+			return fmt.Errorf("Password change required %s input field", k)
 		}
 		switch k {
 		case "username":
@@ -256,11 +254,12 @@ func (db *Database) AddUserSSHKey(opts map[string]interface{}) error {
 			email = opts[k].(string)
 		case "key":
 			payload = opts[k].(string)
-		case "comment":
-			comment = opts[k].(string)
 		case "file_path":
 			fp = opts[k].(string)
 		}
+	}
+	if v, exists := opts["comment"]; exists {
+		comment = v.(string)
 	}
 	user1, err := db.GetUserByUsername(username)
 	if err != nil {
