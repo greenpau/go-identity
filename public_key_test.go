@@ -15,23 +15,119 @@
 package identity
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"golang.org/x/crypto/ssh"
 	"testing"
 )
 
 func TestNewPublicKey(t *testing.T) {
+
 	var testFailed int
+	for i, test := range []struct {
+		usage   string
+		bitSize int
+		comment string
+	}{
+		{
+			usage:   "ssh",
+			bitSize: 4096,
+			comment: "jsmith@outlook.com",
+		},
+	} {
+		pubkeyOpts := make(map[string]interface{})
+		pubkeyOpts["usage"] = test.usage
 
-	pubkeyOpts := make(map[string]interface{})
-	pubkeyOpts["type"] = "rsa"
-	pubkeyOpts["payload"] = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDCchPls/+kEJ7D4ZI6yel6L0smcIfNvhA6YaOTaUX/5AvrdUXe/0mKJ2UTeKSNmkaZEfAetJREkxdVl5s0AoKGYcGcdX0IvdKSArfOEZ0WkPNmc63MlcCeRJLmdZbADN8/XZl47ca/xpvXnKEVN6Fn/TuAhjM3XO+WdHnY0SKgc2hT7Eqov0Yht6N2vULkmSWw2knNKYTmr0bBLJVrZjhDrWQH2UGmvAUZR5pzkuhRqtGdJMfaPe/Api4zkoKLpxQfxpUIPEKSkIaHWpXMxPuAgj7hY1eyos3N4SiyoJTW1DxEuz9dlTsAnOsijnp1zhna5RI/VQae6SFnfGdF99qlb0ydpG5h9iVMyjHGQolXtw3oLBbXwDkzQaZvQ3ESlyj72GSvdu7I2T2KHKqe/W9jvndxApYuFHgD636Iu0P3yHrBsUfHwMJeX7BkciZp5Unb6LehLbhT7M5Z0fX8S0YhFEJVcJBmnjWPmOVHoHlkJCd7SakMWtovTWweWEWghmeov+3lCONWFTqI5+O9Ciybcld8qP7oFSRAhGgUJMYu/OmaNlJAcC7ThlO9PhJAIGFQcwsaWnJk0Mx5ExJVthQn7BhM2GCGw1ikBOAeYd3nQans0uH5/SQlvrf3xIrxPAWBTezGERxDN1GRPT2agI6BKu+E5uYgHIoQBQFyYSOXjw== jsmith@contoso.com"
+		// Generate Private Key
+		privateKey, err := rsa.GenerateKey(rand.Reader, test.bitSize)
+		if err != nil {
+			t.Logf("key %d: failed generating private key: %s", i, err)
+			testFailed++
+			continue
+		}
+		if err := privateKey.Validate(); err != nil {
+			t.Logf("key %d: failed validating private key: %s", i, err)
+			testFailed++
+			continue
+		}
+		privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
+		privateKeyPEMEncoded := pem.EncodeToMemory(
+			&pem.Block{
+				Type:  "RSA PRIVATE KEY",
+				Bytes: privateKeyBytes,
+			},
+		)
+		privateKeyPEM := string(privateKeyPEMEncoded)
+		t.Logf("key %d: private key: %s", i, privateKeyPEM)
 
-	pubkey, err := NewPublicKey(pubkeyOpts)
-	if err != nil {
-		t.Fatalf("failed creating a public key: %s", err)
+		// Derive Public Key
+		publicKey := privateKey.Public()
+		publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
+		if err != nil {
+			t.Logf("key %d: failed generating public key: %s", i, err)
+			testFailed++
+			continue
+		}
+
+		// Create PEM encoded string
+		publicKeyPEMEncoded := pem.EncodeToMemory(
+			&pem.Block{
+				Type:  "RSA PUBLIC KEY",
+				Bytes: publicKeyBytes,
+			},
+		)
+		publicKeyPEM := string(publicKeyPEMEncoded)
+		t.Logf("key %d: public key: %s", i, publicKeyPEM)
+
+		// Create OpenSSH formatted string
+		publicKeyOpenSSH, err := ssh.NewPublicKey(publicKey)
+		if err != nil {
+			t.Logf("key %d: failed generating ssh public key: %s", i, err)
+			testFailed++
+			continue
+		}
+		authorizedKeyBytes := ssh.MarshalAuthorizedKey(publicKeyOpenSSH)
+		authorizedKey := string(authorizedKeyBytes)
+		if test.comment != "" {
+			authorizedKey += " " + test.comment
+		}
+		t.Logf("key %d: public key (OpenSSH): %s", i, authorizedKey)
+
+		// Create Public Key from PEM string
+		pubkeyOpts["payload"] = publicKeyPEM
+		pubkey, err := NewPublicKey(pubkeyOpts)
+		if err != nil {
+			t.Logf("key %d: failed creating a public key from PEM: %s", i, err)
+			testFailed++
+			continue
+		}
+		t.Logf("key %d usage: %s", i, pubkey.Usage)
+		t.Logf("key %d type: %s", i, pubkey.Type)
+		t.Logf("key %d fingerprint: %s, %s", i, pubkey.Fingerprint, pubkey.FingerprintMD5)
+		t.Logf("key %d payload: %s", i, pubkey.Payload)
+
+		// Create Public Key from OpenSSH formatted string
+		pubkeyOpts["payload"] = authorizedKey
+		authkey, err := NewPublicKey(pubkeyOpts)
+		if err != nil {
+			t.Logf("key %d: failed creating a public key from PEM: %s", i, err)
+			testFailed++
+			continue
+		}
+		t.Logf("key %d usage: %s", i, authkey.Usage)
+		t.Logf("key %d type: %s", i, authkey.Type)
+		t.Logf("key %d fingerprint: %s, %s", i, authkey.Fingerprint, authkey.FingerprintMD5)
+		t.Logf("key %d comment: %s", i, authkey.Comment)
+		t.Logf("key %d payload: %s", i, authkey.Payload)
+
+		if pubkey.Payload != authkey.Payload {
+			t.Logf("key %d: key payload mismatch", i)
+			testFailed++
+			continue
+		}
 	}
-
-	t.Logf("PublicKey Type: %s", pubkey.Type)
-	t.Logf("PublicKey Fingerprint: %s", pubkey.Fingerprint)
 
 	if testFailed > 0 {
 		t.Fatalf("encountered %d errors", testFailed)

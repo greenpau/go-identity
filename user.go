@@ -242,3 +242,19 @@ func (user *User) AddName(name *Name) error {
 	user.Names = append(user.Names, name)
 	return nil
 }
+
+// AddSSHKey adds public SSH key to a user identity.
+func (user *User) AddSSHKey(payload, comment string) error {
+	pubkeyOpts := make(map[string]interface{})
+	pubkeyOpts["usage"] = "ssh"
+	pubkeyOpts["payload"] = payload
+	if comment != "" {
+		pubkeyOpts["comment"] = comment
+	}
+	pubkey, err := NewPublicKey(pubkeyOpts)
+	if err != nil {
+		return fmt.Errorf("Failed adding a public key: %s", err)
+	}
+	user.PublicKeys = append(user.PublicKeys, pubkey)
+	return nil
+}

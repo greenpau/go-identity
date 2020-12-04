@@ -52,6 +52,7 @@ qtest:
 	@#go test -v -run TestVersioned *.go
 	@#go test -v -run TestNewID *.go
 	@time richgo test -v -run TestNewPublicKey *.go
+	@#time richgo test -v -run TestNewUser *.go
 
 dep:
 	@echo "Making dependencies check ..."
