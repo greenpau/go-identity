@@ -22,25 +22,25 @@ import (
 
 // User is a user identity.
 type User struct {
-	ID             string                `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
-	Enabled        bool                  `json:"enabled,omitempty" xml:"enabled,omitempty" yaml:"enabled,omitempty"`
-	Human          bool                  `json:"human,omitempty" xml:"human,omitempty" yaml:"human,omitempty"`
-	Username       string                `json:"username,omitempty" xml:"username,omitempty" yaml:"username,omitempty"`
-	Name           *Name                 `json:"name,omitempty" xml:"name,omitempty" yaml:"name,omitempty"`
-	Organization   *Organization         `json:"organization,omitempty" xml:"organization,omitempty" yaml:"organization,omitempty"`
-	Names          []*Name               `json:"names,omitempty" xml:"names,omitempty" yaml:"names,omitempty"`
-	Organizations  []*Organization       `json:"organizations,omitempty" xml:"organizations,omitempty" yaml:"organizations,omitempty"`
-	StreetAddress  []*Location           `json:"street_address,omitempty" xml:"street_address,omitempty" yaml:"street_address,omitempty"`
-	EmailAddresses []*EmailAddress       `json:"email_addresses,omitempty" xml:"email_addresses,omitempty" yaml:"email_addresses,omitempty"`
-	Passwords      []*Password           `json:"passwords,omitempty" xml:"passwords,omitempty" yaml:"passwords,omitempty"`
-	PublicKeys     []*PublicKey          `json:"public_keys,omitempty" xml:"public_keys,omitempty" yaml:"public_keys,omitempty"`
-	Mfa            *MultiFactorAuthState `json:"mfa,omitempty" xml:"mfa,omitempty" yaml:"mfa,omitempty"`
-	Lockout        *LockoutState         `json:"lockout,omitempty" xml:"lockout,omitempty" yaml:"lockout,omitempty"`
-	Avatar         *Image                `json:"avatar,omitempty" xml:"avatar,omitempty" yaml:"avatar,omitempty"`
-	Created        time.Time             `json:"created,omitempty" xml:"created,omitempty" yaml:"created,omitempty"`
-	LastModified   time.Time             `json:"last_modified,omitempty" xml:"last_modified,omitempty" yaml:"last_modified,omitempty"`
-	Revision       int                   `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
-	Roles          []*Role               `json:"roles,omitempty" xml:"roles,omitempty" yaml:"roles,omitempty"`
+	ID             string          `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
+	Enabled        bool            `json:"enabled,omitempty" xml:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Human          bool            `json:"human,omitempty" xml:"human,omitempty" yaml:"human,omitempty"`
+	Username       string          `json:"username,omitempty" xml:"username,omitempty" yaml:"username,omitempty"`
+	Name           *Name           `json:"name,omitempty" xml:"name,omitempty" yaml:"name,omitempty"`
+	Organization   *Organization   `json:"organization,omitempty" xml:"organization,omitempty" yaml:"organization,omitempty"`
+	Names          []*Name         `json:"names,omitempty" xml:"names,omitempty" yaml:"names,omitempty"`
+	Organizations  []*Organization `json:"organizations,omitempty" xml:"organizations,omitempty" yaml:"organizations,omitempty"`
+	StreetAddress  []*Location     `json:"street_address,omitempty" xml:"street_address,omitempty" yaml:"street_address,omitempty"`
+	EmailAddresses []*EmailAddress `json:"email_addresses,omitempty" xml:"email_addresses,omitempty" yaml:"email_addresses,omitempty"`
+	Passwords      []*Password     `json:"passwords,omitempty" xml:"passwords,omitempty" yaml:"passwords,omitempty"`
+	PublicKeys     []*PublicKey    `json:"public_keys,omitempty" xml:"public_keys,omitempty" yaml:"public_keys,omitempty"`
+	MfaTokens      []*MfaToken     `json:"mfa_tokens,omitempty" xml:"mfa_tokens,omitempty" yaml:"mfa_tokens,omitempty"`
+	Lockout        *LockoutState   `json:"lockout,omitempty" xml:"lockout,omitempty" yaml:"lockout,omitempty"`
+	Avatar         *Image          `json:"avatar,omitempty" xml:"avatar,omitempty" yaml:"avatar,omitempty"`
+	Created        time.Time       `json:"created,omitempty" xml:"created,omitempty" yaml:"created,omitempty"`
+	LastModified   time.Time       `json:"last_modified,omitempty" xml:"last_modified,omitempty" yaml:"last_modified,omitempty"`
+	Revision       int             `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
+	Roles          []*Role         `json:"roles,omitempty" xml:"roles,omitempty" yaml:"roles,omitempty"`
 }
 
 // NewUser returns an instance of User.
@@ -284,5 +284,47 @@ func (user *User) DeletePublicKey(keyID string) error {
 		return fmt.Errorf("key id not found")
 	}
 	user.PublicKeys = keys
+	return nil
+}
+
+// AddMfaToken adds MFA token to a user identity.
+func (user *User) AddMfaToken(secret, comment string) error {
+	opts := make(map[string]interface{})
+	opts["secret"] = secret
+	if comment != "" {
+		opts["comment"] = comment
+	}
+	token, err := NewMfaToken(opts)
+	if err != nil {
+		return fmt.Errorf("Failed adding MFA token: %s", err)
+	}
+
+	for _, k := range user.MfaTokens {
+		if k.Secret == token.Secret {
+			return fmt.Errorf("Failed adding MFA token: duplicate secret found")
+		}
+		if k.Comment == token.Comment {
+			return fmt.Errorf("Failed adding MFA token: duplicate comment found")
+		}
+	}
+	user.MfaTokens = append(user.MfaTokens, token)
+	return nil
+}
+
+// DeleteMfaToken deletes MFA token associated with a user.
+func (user *User) DeleteMfaToken(tokenID string) error {
+	var found bool
+	tokens := []*MfaToken{}
+	for _, k := range user.MfaTokens {
+		if k.ID == tokenID {
+			found = true
+			continue
+		}
+		tokens = append(tokens, k)
+	}
+	if !found {
+		return fmt.Errorf("token id not found")
+	}
+	user.MfaTokens = tokens
 	return nil
 }

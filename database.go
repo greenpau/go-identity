@@ -409,3 +409,121 @@ func (db *Database) ChangeUserPassword(opts map[string]interface{}) error {
 
 	return nil
 }
+
+// AddMfaToken adds MFA token for a user.
+func (db *Database) AddMfaToken(opts map[string]interface{}) error {
+	var username, email, secret, comment, fp string
+	for _, k := range []string{"username", "email", "secret", "file_path"} {
+		if _, exists := opts[k]; !exists {
+			return fmt.Errorf("Password change required %s input field", k)
+		}
+		switch k {
+		case "username":
+			username = opts[k].(string)
+		case "email":
+			email = opts[k].(string)
+		case "secret":
+			secret = opts[k].(string)
+		case "file_path":
+			fp = opts[k].(string)
+		}
+	}
+	if v, exists := opts["comment"]; exists {
+		comment = v.(string)
+	}
+	user1, err := db.GetUserByUsername(username)
+	if err != nil {
+		return err
+	}
+	user2, err := db.GetUserByEmailAddress(email)
+	if err != nil {
+		return err
+	}
+	if user1.ID != user2.ID {
+		return fmt.Errorf("username and email point to a different identity")
+	}
+
+	if err := user1.AddMfaToken(secret, comment); err != nil {
+		return fmt.Errorf("failed adding MFA token: %s", err)
+	}
+	if err := db.SaveToFile(fp); err != nil {
+		return fmt.Errorf("failed to commit newly added MFA token: %s", err)
+	}
+	return nil
+}
+
+// GetMfaTokens returns a list of MFA tokens associated with a user.
+func (db *Database) GetMfaTokens(opts map[string]interface{}) ([]*MfaToken, error) {
+	var username, email string
+	for _, k := range []string{"username", "email"} {
+		if _, exists := opts[k]; !exists {
+			return nil, fmt.Errorf("Password change required %s input field", k)
+		}
+		switch k {
+		case "username":
+			username = opts[k].(string)
+		case "email":
+			email = opts[k].(string)
+		}
+	}
+	user1, err := db.GetUserByUsername(username)
+	if err != nil {
+		return nil, err
+	}
+	user2, err := db.GetUserByEmailAddress(email)
+	if err != nil {
+		return nil, err
+	}
+	if user1.ID != user2.ID {
+		return nil, fmt.Errorf("username and email point to a different identity")
+	}
+
+	tokens := []*MfaToken{}
+	for _, token := range user1.MfaTokens {
+		if token.Disabled {
+			continue
+		}
+		tokens = append(tokens, token)
+	}
+	return user1.MfaTokens, nil
+}
+
+// DeleteMfaToken deletes MFA token associated with a user by token id.
+func (db *Database) DeleteMfaToken(opts map[string]interface{}) error {
+	var username, email, tokenID, fp string
+	for _, k := range []string{"username", "email", "token_id", "file_path"} {
+		if _, exists := opts[k]; !exists {
+			return fmt.Errorf("Password change required %s input field", k)
+		}
+		switch k {
+		case "username":
+			username = opts[k].(string)
+		case "email":
+			email = opts[k].(string)
+		case "token_id":
+			tokenID = opts[k].(string)
+		case "file_path":
+			fp = opts[k].(string)
+		}
+	}
+	user1, err := db.GetUserByUsername(username)
+	if err != nil {
+		return err
+	}
+	user2, err := db.GetUserByEmailAddress(email)
+	if err != nil {
+		return err
+	}
+	if user1.ID != user2.ID {
+		return fmt.Errorf("username and email point to a different identity")
+	}
+
+	if err := user1.DeleteMfaToken(tokenID); err != nil {
+		return err
+	}
+
+	if err := db.SaveToFile(fp); err != nil {
+		return fmt.Errorf("failed to commit removal of MFA token, %s", err)
+	}
+	return nil
+}

@@ -95,6 +95,7 @@ func GetTagCompliance(resource interface{}) ([]string, bool) {
 
 func convertFieldToTag(s string) string {
 	s = strcase.ToSnake(s)
+	s = strings.ReplaceAll(s, "_md_5", "_md5")
 	return s
 }
 

@@ -19,6 +19,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"github.com/greenpau/go-identity/internal/utils"
 	"golang.org/x/crypto/ssh"
 	"testing"
 )
@@ -128,6 +129,16 @@ func TestNewPublicKey(t *testing.T) {
 			t.Logf("key %d: key payload mismatch", i)
 			testFailed++
 			continue
+		}
+
+		if i == 0 {
+			complianceMessages, compliant := utils.GetTagCompliance(pubkey)
+			if !compliant {
+				testFailed++
+			}
+			for _, entry := range complianceMessages {
+				t.Logf("tag: %s", entry)
+			}
 		}
 	}
 

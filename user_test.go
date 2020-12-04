@@ -75,4 +75,5 @@ func TestNewUser(t *testing.T) {
 	if len(user.PublicKeys) > 0 {
 		t.Fatalf("expected 0 public keys")
 	}
+
 }
