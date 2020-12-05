@@ -240,6 +240,21 @@ func (db *Database) LoadFromFile(fp string) error {
 	return nil
 }
 
+func (db *Database) validateUserIdentity(username, email string) (*User, error) {
+	user1, err := db.GetUserByUsername(username)
+	if err != nil {
+		return nil, err
+	}
+	user2, err := db.GetUserByEmailAddress(email)
+	if err != nil {
+		return nil, err
+	}
+	if user1.ID != user2.ID {
+		return nil, fmt.Errorf("username and email point to a different identity")
+	}
+	return user1, nil
+}
+
 // AddPublicKey adds public key, e.g. GPG or SSH, for a user.
 func (db *Database) AddPublicKey(opts map[string]interface{}) error {
 	var username, email, payload, keyUsage, comment, fp string
@@ -263,19 +278,13 @@ func (db *Database) AddPublicKey(opts map[string]interface{}) error {
 	if v, exists := opts["comment"]; exists {
 		comment = v.(string)
 	}
-	user1, err := db.GetUserByUsername(username)
+
+	user, err := db.validateUserIdentity(username, email)
 	if err != nil {
 		return err
-	}
-	user2, err := db.GetUserByEmailAddress(email)
-	if err != nil {
-		return err
-	}
-	if user1.ID != user2.ID {
-		return fmt.Errorf("username and email point to a different identity")
 	}
 
-	if err := user1.AddPublicKey(keyUsage, payload, comment); err != nil {
+	if err := user.AddPublicKey(keyUsage, payload, comment); err != nil {
 		return fmt.Errorf("failed adding public %s key, %s", keyUsage, err)
 	}
 	if err := db.SaveToFile(fp); err != nil {
@@ -300,20 +309,14 @@ func (db *Database) GetPublicKeys(opts map[string]interface{}) ([]*PublicKey, er
 			keyUsage = opts[k].(string)
 		}
 	}
-	user1, err := db.GetUserByUsername(username)
+
+	user, err := db.validateUserIdentity(username, email)
 	if err != nil {
 		return nil, err
-	}
-	user2, err := db.GetUserByEmailAddress(email)
-	if err != nil {
-		return nil, err
-	}
-	if user1.ID != user2.ID {
-		return nil, fmt.Errorf("username and email point to a different identity")
 	}
 
 	keys := []*PublicKey{}
-	for _, k := range user1.PublicKeys {
+	for _, k := range user.PublicKeys {
 		if k.Usage != keyUsage {
 			continue
 		}
@@ -340,19 +343,13 @@ func (db *Database) DeletePublicKey(opts map[string]interface{}) error {
 			fp = opts[k].(string)
 		}
 	}
-	user1, err := db.GetUserByUsername(username)
+
+	user, err := db.validateUserIdentity(username, email)
 	if err != nil {
 		return err
-	}
-	user2, err := db.GetUserByEmailAddress(email)
-	if err != nil {
-		return err
-	}
-	if user1.ID != user2.ID {
-		return fmt.Errorf("username and email point to a different identity")
 	}
 
-	if err := user1.DeletePublicKey(keyID); err != nil {
+	if err := user.DeletePublicKey(keyID); err != nil {
 		return err
 	}
 
@@ -383,23 +380,16 @@ func (db *Database) ChangeUserPassword(opts map[string]interface{}) error {
 		}
 	}
 
-	user1, err := db.GetUserByUsername(username)
+	user, err := db.validateUserIdentity(username, email)
 	if err != nil {
 		return err
-	}
-	user2, err := db.GetUserByEmailAddress(email)
-	if err != nil {
-		return err
-	}
-	if user1.ID != user2.ID {
-		return fmt.Errorf("username and email point to a different identity")
 	}
 
-	if err := user1.VerifyPassword(currentPassword); err != nil {
+	if err := user.VerifyPassword(currentPassword); err != nil {
 		return fmt.Errorf("current password is not valid, %s", err)
 	}
 
-	if err := user1.AddPassword(newPassword); err != nil {
+	if err := user.AddPassword(newPassword); err != nil {
 		return fmt.Errorf("failed setting new password, %s", err)
 	}
 
@@ -431,19 +421,13 @@ func (db *Database) AddMfaToken(opts map[string]interface{}) error {
 	if v, exists := opts["comment"]; exists {
 		comment = v.(string)
 	}
-	user1, err := db.GetUserByUsername(username)
+
+	user, err := db.validateUserIdentity(username, email)
 	if err != nil {
 		return err
-	}
-	user2, err := db.GetUserByEmailAddress(email)
-	if err != nil {
-		return err
-	}
-	if user1.ID != user2.ID {
-		return fmt.Errorf("username and email point to a different identity")
 	}
 
-	if err := user1.AddMfaToken(secret, comment); err != nil {
+	if err := user.AddMfaToken(secret, comment); err != nil {
 		return fmt.Errorf("failed adding MFA token: %s", err)
 	}
 	if err := db.SaveToFile(fp); err != nil {
@@ -466,26 +450,20 @@ func (db *Database) GetMfaTokens(opts map[string]interface{}) ([]*MfaToken, erro
 			email = opts[k].(string)
 		}
 	}
-	user1, err := db.GetUserByUsername(username)
+
+	user, err := db.validateUserIdentity(username, email)
 	if err != nil {
 		return nil, err
-	}
-	user2, err := db.GetUserByEmailAddress(email)
-	if err != nil {
-		return nil, err
-	}
-	if user1.ID != user2.ID {
-		return nil, fmt.Errorf("username and email point to a different identity")
 	}
 
 	tokens := []*MfaToken{}
-	for _, token := range user1.MfaTokens {
+	for _, token := range user.MfaTokens {
 		if token.Disabled {
 			continue
 		}
 		tokens = append(tokens, token)
 	}
-	return user1.MfaTokens, nil
+	return user.MfaTokens, nil
 }
 
 // DeleteMfaToken deletes MFA token associated with a user by token id.
@@ -506,19 +484,13 @@ func (db *Database) DeleteMfaToken(opts map[string]interface{}) error {
 			fp = opts[k].(string)
 		}
 	}
-	user1, err := db.GetUserByUsername(username)
+
+	user, err := db.validateUserIdentity(username, email)
 	if err != nil {
 		return err
-	}
-	user2, err := db.GetUserByEmailAddress(email)
-	if err != nil {
-		return err
-	}
-	if user1.ID != user2.ID {
-		return fmt.Errorf("username and email point to a different identity")
 	}
 
-	if err := user1.DeleteMfaToken(tokenID); err != nil {
+	if err := user.DeleteMfaToken(tokenID); err != nil {
 		return err
 	}
 
