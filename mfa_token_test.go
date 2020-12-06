@@ -47,6 +47,16 @@ func TestNewMfaToken(t *testing.T) {
 			algo:       "sha1",
 		},
 		{
+			name:       "valid mfa token with long secret",
+			secretText: "TJhDkLuPEtRapebVbBmV81JgdxSmZhYwLisDhA2G57yju4gWH4IRJ8KCIviDaFP5lgjsBnTG7L7yeK5kb",
+			comment:    "ms auth app",
+			period:     "30",
+			digits:     "6",
+			tokenType:  "totp",
+			shouldFail: false,
+			algo:       "sha1",
+		},
+		{
 			name:       "invalid mfa token with alpha char in period",
 			secretText: "c71ca4c68bc14ec5b4ab8d3c3b63802c",
 			comment:    "ms auth app",
