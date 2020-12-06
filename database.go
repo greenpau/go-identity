@@ -402,7 +402,7 @@ func (db *Database) ChangeUserPassword(opts map[string]interface{}) error {
 
 // AddMfaToken adds MFA token for a user.
 func (db *Database) AddMfaToken(opts map[string]interface{}) error {
-	var username, email, secret, comment, fp string
+	var username, email, fp string
 	for _, k := range []string{"username", "email", "secret", "file_path"} {
 		if _, exists := opts[k]; !exists {
 			return fmt.Errorf("Password change required %s input field", k)
@@ -412,14 +412,9 @@ func (db *Database) AddMfaToken(opts map[string]interface{}) error {
 			username = opts[k].(string)
 		case "email":
 			email = opts[k].(string)
-		case "secret":
-			secret = opts[k].(string)
 		case "file_path":
 			fp = opts[k].(string)
 		}
-	}
-	if v, exists := opts["comment"]; exists {
-		comment = v.(string)
 	}
 
 	user, err := db.validateUserIdentity(username, email)
@@ -427,7 +422,16 @@ func (db *Database) AddMfaToken(opts map[string]interface{}) error {
 		return err
 	}
 
-	if err := user.AddMfaToken(secret, comment); err != nil {
+	tokenOpts := make(map[string]interface{})
+	for k, v := range opts {
+		switch k {
+		case "username", "email", "file_path":
+		default:
+			tokenOpts[k] = v
+		}
+	}
+
+	if err := user.AddMfaToken(tokenOpts); err != nil {
 		return fmt.Errorf("failed adding MFA token: %s", err)
 	}
 	if err := db.SaveToFile(fp); err != nil {

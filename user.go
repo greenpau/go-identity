@@ -288,12 +288,7 @@ func (user *User) DeletePublicKey(keyID string) error {
 }
 
 // AddMfaToken adds MFA token to a user identity.
-func (user *User) AddMfaToken(secret, comment string) error {
-	opts := make(map[string]interface{})
-	opts["secret"] = secret
-	if comment != "" {
-		opts["comment"] = comment
-	}
+func (user *User) AddMfaToken(opts map[string]interface{}) error {
 	token, err := NewMfaToken(opts)
 	if err != nil {
 		return fmt.Errorf("Failed adding MFA token: %s", err)

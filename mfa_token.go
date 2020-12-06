@@ -79,14 +79,19 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 
 	// Period
 	if v, exists := opts["period"]; exists {
-		period, err := strconv.Atoi(v.(string))
+		period := v.(string)
+		periodInt, err := strconv.Atoi(period)
 		if err != nil {
 			return nil, err
 		}
-		p.Period = period
+		if period != strconv.Itoa(periodInt) {
+			return nil, fmt.Errorf("invalid mfa token period value")
+		}
+
+		p.Period = periodInt
 	}
 	if p.Period < 30 || p.Period > 300 {
-		return nil, fmt.Errorf("invalid mfa token period value, must be between 30 to 300 seconds")
+		return nil, fmt.Errorf("invalid mfa token period value, must be between 30 to 300 seconds, got %d", p.Period)
 	}
 
 	// Type

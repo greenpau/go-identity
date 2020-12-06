@@ -47,6 +47,16 @@ func TestNewMfaToken(t *testing.T) {
 			algo:       "sha1",
 		},
 		{
+			name:       "invalid mfa token with alpha char in period",
+			secretText: "c71ca4c68bc14ec5b4ab8d3c3b63802c",
+			comment:    "ms auth app",
+			period:     "30a",
+			digits:     "6",
+			tokenType:  "totp",
+			algo:       "sha1",
+			shouldFail: true,
+		},
+		{
 			name:       "invalid mfa token with matching codes",
 			code1:      "1234",
 			code2:      "1234",
@@ -100,10 +110,6 @@ func TestNewMfaToken(t *testing.T) {
 			opts["comment"] = test.comment
 			t.Logf("test %d: comment=%s", i, test.comment)
 		}
-
-		if test.period != "" {
-			opts["period"] = test.period
-		}
 		if test.tokenType != "" {
 			opts["type"] = test.tokenType
 			t.Logf("test %d: type=%s", i, test.tokenType)
@@ -127,12 +133,22 @@ func TestNewMfaToken(t *testing.T) {
 		opts["digits"] = test.digits
 		t.Logf("test %d: digits=%d", i, testDigits)
 
-		testPeriod, err := strconv.Atoi(test.period)
-		if err != nil {
-			t.Errorf("test %d: FAIL, unexpected failure during period conversion: %s", i, err)
-			testFailed++
-			continue
+		var testPeriod int
+		if test.period != "" {
+			testPeriod, err = strconv.Atoi(test.period)
+			if err != nil {
+				if test.shouldFail {
+					t.Logf("test %d: SUCCESS, expected failure during period processing and got the failure: %s", i, err)
+					continue
+				} else {
+
+					t.Errorf("test %d: FAIL, unexpected failure during period conversion: %s", i, err)
+					testFailed++
+					continue
+				}
+			}
 		}
+		opts["period"] = test.period
 		t.Logf("test %d: period=%d", i, testPeriod)
 
 		t.Logf("test %d: t0=%s", i, time.Now().UTC())
