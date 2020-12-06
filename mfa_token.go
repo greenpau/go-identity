@@ -136,7 +136,7 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 		}
 		if i == "1" {
 			code1 = code
-			if err := p.validateCodeWithTime(code, time.Now().Add(-time.Second*time.Duration(p.Period)).UTC()); err != nil {
+			if err := p.ValidateCodeWithTime(code, time.Now().Add(-time.Second*time.Duration(p.Period)).UTC()); err != nil {
 				return nil, fmt.Errorf("MFA code1 %s is invalid", code)
 			}
 			continue
@@ -148,7 +148,7 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 			if len(code2) != len(code1) {
 				return nil, fmt.Errorf("MFA code 1 and 2 have different length")
 			}
-			if err := p.validateCodeWithTime(code, time.Now().UTC()); err != nil {
+			if err := p.ValidateCodeWithTime(code, time.Now().UTC()); err != nil {
 				return nil, fmt.Errorf("MFA code2 %s is invalid", code)
 			}
 		}
@@ -165,12 +165,14 @@ func (p *MfaToken) Disable() {
 	p.DisabledAt = time.Now().UTC()
 }
 
-func (p *MfaToken) validateCode(code string) error {
+// ValidateCode validates a passcode
+func (p *MfaToken) ValidateCode(code string) error {
 	ts := time.Now().UTC()
-	return p.validateCodeWithTime(code, ts)
+	return p.ValidateCodeWithTime(code, ts)
 }
 
-func (p *MfaToken) validateCodeWithTime(code string, ts time.Time) error {
+// ValidateCodeWithTime validates a passcode at a particular time.
+func (p *MfaToken) ValidateCodeWithTime(code string, ts time.Time) error {
 	code = strings.TrimSpace(code)
 	if len(code) != p.Digits {
 		return fmt.Errorf("passcode length is invalid")
