@@ -16,6 +16,7 @@ package identity
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -40,6 +41,7 @@ type PublicKey struct {
 	FingerprintMD5 string    `json:"fingerprint_md5,omitempty" xml:"fingerprint_md5,omitempty" yaml:"fingerprint_md5,omitempty"`
 	Comment        string    `json:"comment,omitempty" xml:"comment,omitempty" yaml:"comment,omitempty"`
 	Payload        string    `json:"payload,omitempty" xml:"payload,omitempty" yaml:"payload,omitempty"`
+	OpenSSH        string    `json:"openssh,omitempty" xml:"openssh,omitempty" yaml:"openssh,omitempty"`
 	Expired        bool      `json:"expired,omitempty" xml:"expired,omitempty" yaml:"expired,omitempty"`
 	ExpiredAt      time.Time `json:"expired_at,omitempty" xml:"expired_at,omitempty" yaml:"expired_at,omitempty"`
 	CreatedAt      time.Time `json:"created_at,omitempty" xml:"created_at,omitempty" yaml:"created_at,omitempty"`
@@ -88,6 +90,7 @@ func (p *PublicKey) parse() error {
 	}
 	payloadBytes := bytes.TrimSpace([]byte(p.Payload))
 	if strings.Contains(p.Payload, "RSA PUBLIC KEY") {
+		// Processing PEM file format
 		if p.Usage != "ssh" {
 			return fmt.Errorf("usage is ssh while payload is not")
 		}
@@ -106,17 +109,20 @@ func (p *PublicKey) parse() error {
 		p.Type = publicKey.Type()
 		p.FingerprintMD5 = ssh.FingerprintLegacyMD5(publicKey)
 		p.Fingerprint = ssh.FingerprintSHA256(publicKey)
-		p.Payload = string(ssh.MarshalAuthorizedKey(publicKey))
-		p.Payload = strings.TrimLeft(p.Payload, p.Type+" ")
+		p.Fingerprint = strings.ReplaceAll(p.Fingerprint, "SHA256:", "")
+		p.OpenSSH = string(ssh.MarshalAuthorizedKey(publicKey))
+		p.OpenSSH = strings.TrimLeft(p.OpenSSH, p.Type+" ")
 		return nil
 	}
 	if strings.Contains(p.Payload, "PGP PUBLIC KEY") {
+		// Processing PEM file format
 		if p.Usage != "pgp" {
 			return fmt.Errorf("usage is pgp while payload is not ")
 		}
 		return fmt.Errorf("PGP PUBLIC KEY is unsupported")
 	}
-	// Attempt parsing as authorized SSH keys
+
+	// Attempt parsing as authorized OpenSSH keys
 	i := bytes.IndexAny(payloadBytes, " \t")
 	if i == -1 {
 		i = len(payloadBytes)
@@ -132,7 +138,7 @@ func (p *PublicKey) parse() error {
 			comment = bytes.TrimSpace(payloadBase64[i:])
 			payloadBase64 = payloadBase64[:i]
 		}
-		p.Payload = string(payloadBase64)
+		p.OpenSSH = string(payloadBase64)
 	}
 	k := make([]byte, base64.StdEncoding.DecodedLen(len(payloadBase64)))
 	n, err := base64.StdEncoding.Decode(k, payloadBase64)
@@ -147,5 +153,31 @@ func (p *PublicKey) parse() error {
 	p.Comment = string(comment)
 	p.FingerprintMD5 = ssh.FingerprintLegacyMD5(publicKey)
 	p.Fingerprint = ssh.FingerprintSHA256(publicKey)
+
+	// Convert OpenSSH key to RSA PUBLIC KEY
+	switch publicKey.Type() {
+	case "ssh-rsa":
+		publicKeyBytes := publicKey.Marshal()
+		parsedPublicKey, err := ssh.ParsePublicKey(publicKeyBytes)
+		if err != nil {
+			return fmt.Errorf("failed parsing OpenSSH key: %s", err)
+		}
+		cryptoKey := parsedPublicKey.(ssh.CryptoPublicKey)
+		publicCryptoKey := cryptoKey.CryptoPublicKey()
+		rsaKey := publicCryptoKey.(*rsa.PublicKey)
+		rsaKeyASN1, err := x509.MarshalPKIXPublicKey(rsaKey)
+		if err != nil {
+			return fmt.Errorf("failed converting a public key to PKIX, ASN.1 DER form: %s", err)
+		}
+		encodedKey := pem.EncodeToMemory(&pem.Block{
+			Type: "RSA PUBLIC KEY",
+			//Bytes: x509.MarshalPKCS1PublicKey(rsaKey),
+			Bytes: rsaKeyASN1,
+		})
+		p.Payload = string(encodedKey)
+	default:
+		return fmt.Errorf("unsupported key type: %s", publicKey.Type())
+	}
+
 	return nil
 }

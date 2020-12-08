@@ -44,12 +44,12 @@ func TestNewPublicKey(t *testing.T) {
 		// Generate Private Key
 		privateKey, err := rsa.GenerateKey(rand.Reader, test.bitSize)
 		if err != nil {
-			t.Logf("key %d: failed generating private key: %s", i, err)
+			t.Logf("test %d: failed generating private key: %s", i, err)
 			testFailed++
 			continue
 		}
 		if err := privateKey.Validate(); err != nil {
-			t.Logf("key %d: failed validating private key: %s", i, err)
+			t.Logf("test %d: failed validating private key: %s", i, err)
 			testFailed++
 			continue
 		}
@@ -61,13 +61,13 @@ func TestNewPublicKey(t *testing.T) {
 			},
 		)
 		privateKeyPEM := string(privateKeyPEMEncoded)
-		t.Logf("key %d: private key: %s", i, privateKeyPEM)
+		t.Logf("test %d: private key: %s", i, privateKeyPEM)
 
 		// Derive Public Key
 		publicKey := privateKey.Public()
 		publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
 		if err != nil {
-			t.Logf("key %d: failed generating public key: %s", i, err)
+			t.Logf("test %d: failed generating public key: %s", i, err)
 			testFailed++
 			continue
 		}
@@ -80,12 +80,12 @@ func TestNewPublicKey(t *testing.T) {
 			},
 		)
 		publicKeyPEM := string(publicKeyPEMEncoded)
-		t.Logf("key %d: public key: %s", i, publicKeyPEM)
+		t.Logf("test %d: public key: %s", i, publicKeyPEM)
 
 		// Create OpenSSH formatted string
 		publicKeyOpenSSH, err := ssh.NewPublicKey(publicKey)
 		if err != nil {
-			t.Logf("key %d: failed generating ssh public key: %s", i, err)
+			t.Logf("test %d: failed generating ssh public key: %s", i, err)
 			testFailed++
 			continue
 		}
@@ -94,39 +94,47 @@ func TestNewPublicKey(t *testing.T) {
 		if test.comment != "" {
 			authorizedKey += " " + test.comment
 		}
-		t.Logf("key %d: public key (OpenSSH): %s", i, authorizedKey)
+		t.Logf("test %d: public key (OpenSSH): %s", i, authorizedKey)
 
 		// Create Public Key from PEM string
 		pubkeyOpts["payload"] = publicKeyPEM
 		pubkey, err := NewPublicKey(pubkeyOpts)
 		if err != nil {
-			t.Logf("key %d: failed creating a public key from PEM: %s", i, err)
+			t.Logf("test %d: failed creating a public key from PEM: %s", i, err)
 			testFailed++
 			continue
 		}
-		t.Logf("key %d id: %s", i, pubkey.ID)
-		t.Logf("key %d usage: %s", i, pubkey.Usage)
-		t.Logf("key %d type: %s", i, pubkey.Type)
-		t.Logf("key %d fingerprint: %s, %s", i, pubkey.Fingerprint, pubkey.FingerprintMD5)
-		t.Logf("key %d payload: %s", i, pubkey.Payload)
+		t.Logf("test %d id: %s", i, pubkey.ID)
+		t.Logf("test %d usage: %s", i, pubkey.Usage)
+		t.Logf("test %d type: %s", i, pubkey.Type)
+		t.Logf("test %d fingerprint: %s, %s", i, pubkey.Fingerprint, pubkey.FingerprintMD5)
+		t.Logf("test %d payload: %s", i, pubkey.Payload)
+		t.Logf("test %d OpenSSH: %s", i, pubkey.OpenSSH)
 
 		// Create Public Key from OpenSSH formatted string
 		pubkeyOpts["payload"] = authorizedKey
 		authkey, err := NewPublicKey(pubkeyOpts)
 		if err != nil {
-			t.Logf("key %d: failed creating a public key from PEM: %s", i, err)
+			t.Logf("test %d: failed creating a public key from PEM: %s", i, err)
 			testFailed++
 			continue
 		}
-		t.Logf("key %d id: %s", i, authkey.ID)
-		t.Logf("key %d usage: %s", i, authkey.Usage)
-		t.Logf("key %d type: %s", i, authkey.Type)
-		t.Logf("key %d fingerprint: %s, %s", i, authkey.Fingerprint, authkey.FingerprintMD5)
-		t.Logf("key %d comment: %s", i, authkey.Comment)
-		t.Logf("key %d payload: %s", i, authkey.Payload)
+		t.Logf("test %d id: %s", i, authkey.ID)
+		t.Logf("test %d usage: %s", i, authkey.Usage)
+		t.Logf("test %d type: %s", i, authkey.Type)
+		t.Logf("test %d fingerprint: %s, %s", i, authkey.Fingerprint, authkey.FingerprintMD5)
+		t.Logf("test %d comment: %s", i, authkey.Comment)
+		t.Logf("test %d payload: %s", i, authkey.Payload)
+		t.Logf("test %d OpenSSH: %s", i, authkey.OpenSSH)
+
+		if pubkey.OpenSSH != authkey.OpenSSH {
+			t.Logf("test %d: key OpenSSH payload mismatch", i)
+			testFailed++
+			continue
+		}
 
 		if pubkey.Payload != authkey.Payload {
-			t.Logf("key %d: key payload mismatch", i)
+			t.Logf("test %d: key payload mismatch", i)
 			testFailed++
 			continue
 		}
