@@ -323,3 +323,25 @@ func (user *User) DeleteMfaToken(tokenID string) error {
 	user.MfaTokens = tokens
 	return nil
 }
+
+// GetMfaConfigurationMetadata returns MFA configuration metadata
+func (user *User) GetMfaConfigurationMetadata() map[string]interface{} {
+	conf := map[string]interface{}{
+		"mfa_configured":     false,
+		"mfa_app_configured": false,
+		"mfa_u2f_configured": false,
+	}
+	for _, token := range user.MfaTokens {
+		if token.Disabled {
+			continue
+		}
+		conf["mfa_configured"] = true
+		switch token.Type {
+		case "totp":
+			conf["mfa_app_configured"] = true
+		case "u2f":
+			conf["mfa_u2f_configured"] = true
+		}
+	}
+	return conf
+}

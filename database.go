@@ -108,8 +108,17 @@ func (db *Database) AddUser(user *User) error {
 	return nil
 }
 
+// AuthenticateDummyUser performs password validation for a user supplied password.
+func (db *Database) AuthenticateDummyUser(password string) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	u := NewUser("dummy")
+	u.AddPassword(password)
+	return
+}
+
 // AuthenticateUser adds user identity to the database.
-func (db *Database) AuthenticateUser(username, password string) (map[string]interface{}, bool, error) {
+func (db *Database) AuthenticateUser(username, password string, opts map[string]interface{}) (map[string]interface{}, bool, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	username = strings.ToLower(username)
@@ -133,6 +142,32 @@ func (db *Database) AuthenticateUser(username, password string) (map[string]inte
 	}
 	if roles := user.GetRolesClaim(); roles != "" {
 		userMap["roles"] = roles
+	}
+	if opts == nil {
+		return userMap, true, nil
+	}
+	if len(opts) == 0 {
+		return userMap, true, nil
+	}
+	for k, v := range opts {
+		switch k {
+		case "require_mfa":
+			switch v.(type) {
+			case bool:
+				if v.(bool) {
+					userData := user.GetMfaConfigurationMetadata()
+					if _, exists := userMap["metadata"]; !exists {
+						userMap["metadata"] = userData
+					} else {
+						metadata := userMap["metadata"].(map[string]interface{})
+						for nk, nv := range userData {
+							metadata[nk] = nv
+						}
+						userMap["metadata"] = metadata
+					}
+				}
+			}
+		}
 	}
 	return userMap, true, nil
 }

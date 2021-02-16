@@ -83,7 +83,7 @@ func TestNewDatabase(t *testing.T) {
 		t.Fatalf("error saving database at %s: %s", dbPath, err)
 	}
 
-	claims, authed, err := db.AuthenticateUser(user.Username, password)
+	claims, authed, err := db.AuthenticateUser(user.Username, password, nil)
 	if err != nil || !authed {
 		t.Fatalf(
 			"error authenticating user %s, claims: %v, authenticated: %v, error: %s",
@@ -110,11 +110,11 @@ func TestNewDatabase(t *testing.T) {
 		t.Logf("User password has changed")
 	}
 
-	if _, authed, _ := db.AuthenticateUser(user.Username, prevPassword); authed {
+	if _, authed, _ := db.AuthenticateUser(user.Username, prevPassword, nil); authed {
 		t.Fatalf("expected authentication failure, but got success")
 	}
 
-	claims, authed, err = db.AuthenticateUser(user.Username, newPassword)
+	claims, authed, err = db.AuthenticateUser(user.Username, newPassword, nil)
 	if !authed {
 		t.Fatalf("expected authentication success, but got failure: %s", err)
 	}
