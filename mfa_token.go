@@ -132,37 +132,19 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 		}
 
 		// Codes
-		var code1, code2 string
-		for _, i := range []string{"1", "2"} {
-			v, exists := opts["code"+i]
-			if !exists {
-				return nil, fmt.Errorf("mfa code %s not found", i)
-			}
-			code := v.(string)
-			if code == "" {
-				return nil, fmt.Errorf("MFA code %s is empty", i)
-			}
-			if len(code) < 4 || len(code) > 8 {
-				return nil, fmt.Errorf("MFA code %s is not 4-8 characters", i)
-			}
-			if i == "1" {
-				code1 = code
-				if err := p.ValidateCodeWithTime(code, time.Now().Add(-time.Second*time.Duration(p.Period)).UTC()); err != nil {
-					return nil, fmt.Errorf("MFA code1 %s is invalid", code)
-				}
-				continue
-			} else {
-				code2 = code
-				if code2 == code1 {
-					return nil, fmt.Errorf("MFA code 1 and 2 match")
-				}
-				if len(code2) != len(code1) {
-					return nil, fmt.Errorf("MFA code 1 and 2 have different length")
-				}
-				if err := p.ValidateCodeWithTime(code, time.Now().UTC()); err != nil {
-					return nil, fmt.Errorf("MFA code2 %s is invalid", code)
-				}
-			}
+		v, exists := opts["passcode"]
+		if !exists {
+			return nil, fmt.Errorf("mfa passcode not found")
+		}
+		code := v.(string)
+		if code == "" {
+			return nil, fmt.Errorf("MFA passcode is empty")
+		}
+		if len(code) < 4 || len(code) > 8 {
+			return nil, fmt.Errorf("MFA passcode is not 4-8 characters")
+		}
+		if err := p.ValidateCodeWithTime(code, time.Now().Add(-time.Second*time.Duration(p.Period)).UTC()); err != nil {
+			return nil, fmt.Errorf("MFA passcode %s is invalid", code)
 		}
 	case "u2f":
 		var webauthnChallenge string

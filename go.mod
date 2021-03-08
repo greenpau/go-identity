@@ -1,6 +1,6 @@
 module github.com/greenpau/go-identity
 
-go 1.14
+go 1.15
 
 require (
 	github.com/greenpau/versioned v1.0.23
