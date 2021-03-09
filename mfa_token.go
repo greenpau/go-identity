@@ -33,19 +33,20 @@ import (
 
 // MfaToken is a puiblic key in a public-private key pair.
 type MfaToken struct {
-	ID         string     `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
-	Type       string     `json:"type,omitempty" xml:"type,omitempty" yaml:"type,omitempty"`
-	Algorithm  string     `json:"algorithm,omitempty" xml:"algorithm,omitempty" yaml:"algorithm,omitempty"`
-	Comment    string     `json:"comment,omitempty" xml:"comment,omitempty" yaml:"comment,omitempty"`
-	Secret     string     `json:"secret,omitempty" xml:"secret,omitempty" yaml:"secret,omitempty"`
-	Period     int        `json:"period,omitempty" xml:"period,omitempty" yaml:"period,omitempty"`
-	Digits     int        `json:"digits,omitempty" xml:"digits,omitempty" yaml:"digits,omitempty"`
-	Expired    bool       `json:"expired,omitempty" xml:"expired,omitempty" yaml:"expired,omitempty"`
-	ExpiredAt  time.Time  `json:"expired_at,omitempty" xml:"expired_at,omitempty" yaml:"expired_at,omitempty"`
-	CreatedAt  time.Time  `json:"created_at,omitempty" xml:"created_at,omitempty" yaml:"created_at,omitempty"`
-	Disabled   bool       `json:"disabled,omitempty" xml:"disabled,omitempty" yaml:"disabled,omitempty"`
-	DisabledAt time.Time  `json:"disabled_at,omitempty" xml:"disabled_at,omitempty" yaml:"disabled_at,omitempty"`
-	Device     *MfaDevice `json:"device,omitempty" xml:"device,omitempty" yaml:"device,omitempty"`
+	ID         string            `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
+	Type       string            `json:"type,omitempty" xml:"type,omitempty" yaml:"type,omitempty"`
+	Algorithm  string            `json:"algorithm,omitempty" xml:"algorithm,omitempty" yaml:"algorithm,omitempty"`
+	Comment    string            `json:"comment,omitempty" xml:"comment,omitempty" yaml:"comment,omitempty"`
+	Secret     string            `json:"secret,omitempty" xml:"secret,omitempty" yaml:"secret,omitempty"`
+	Period     int               `json:"period,omitempty" xml:"period,omitempty" yaml:"period,omitempty"`
+	Digits     int               `json:"digits,omitempty" xml:"digits,omitempty" yaml:"digits,omitempty"`
+	Expired    bool              `json:"expired,omitempty" xml:"expired,omitempty" yaml:"expired,omitempty"`
+	ExpiredAt  time.Time         `json:"expired_at,omitempty" xml:"expired_at,omitempty" yaml:"expired_at,omitempty"`
+	CreatedAt  time.Time         `json:"created_at,omitempty" xml:"created_at,omitempty" yaml:"created_at,omitempty"`
+	Disabled   bool              `json:"disabled,omitempty" xml:"disabled,omitempty" yaml:"disabled,omitempty"`
+	DisabledAt time.Time         `json:"disabled_at,omitempty" xml:"disabled_at,omitempty" yaml:"disabled_at,omitempty"`
+	Device     *MfaDevice        `json:"device,omitempty" xml:"device,omitempty" yaml:"device,omitempty"`
+	Parameters map[string]string `json:"parameters,omitempty" xml:"parameters,omitempty" yaml:"parameters,omitempty"`
 }
 
 // MfaDevice is the hardware device associated with MfaToken.
@@ -62,8 +63,9 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 	}
 
 	p := &MfaToken{
-		ID:        GetRandomString(40),
-		CreatedAt: time.Now().UTC(),
+		ID:         GetRandomString(40),
+		CreatedAt:  time.Now().UTC(),
+		Parameters: make(map[string]string),
 	}
 
 	if v, exists := opts["comment"]; exists {
@@ -168,6 +170,31 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 			return nil, fmt.Errorf("invalid u2f request, webauthn challenge not found")
 		}
 
+		if r.ID == "" {
+			return nil, fmt.Errorf("invalid u2f request, webauthn register id is empty")
+		}
+
+		switch r.Type {
+		case "public-key":
+		case "":
+			return nil, fmt.Errorf("invalid u2f request, webauthn register key type is empty")
+		default:
+			return nil, fmt.Errorf("invalid u2f request, webauthn register key type is invalid")
+		}
+
+		for _, tr := range r.Transports {
+			switch tr {
+			case "usb":
+			case "nfc":
+			case "ble":
+			case "internal":
+			case "":
+				return nil, fmt.Errorf("invalid u2f request, webauthn register key transport is empty")
+			default:
+				return nil, fmt.Errorf("invalid u2f request, webauthn register key transport is invalid")
+			}
+		}
+
 		if r.AttestationObject == nil {
 			return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object is nil")
 		}
@@ -235,7 +262,14 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 			return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object auth data credential pubkey key_type %s unsupported", keyType)
 		}
 
-		p.Secret = fmt.Sprintf("%s|%s|%s|%s|%s", keyType, keyAlgo, curveType, curveXcoord, curveYcoord)
+		p.Parameters["u2f_id"] = r.ID
+		p.Parameters["u2f_type"] = r.Type
+		p.Parameters["u2f_transports"] = strings.Join(r.Transports, ",")
+		p.Parameters["key_type"] = keyType
+		p.Parameters["key_algo"] = keyAlgo
+		p.Parameters["curve_type"] = curveType
+		p.Parameters["curve_xcoord"] = curveXcoord
+		p.Parameters["curve_ycoord"] = curveYcoord
 		//return nil, fmt.Errorf("XXX: %v", r.AttestationObject.AttestationStatement.Certificates)
 		//return nil, fmt.Errorf("XXX: %v", r.AttestationObject.AuthData.CredentialData)
 	default:

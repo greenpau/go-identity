@@ -16,6 +16,9 @@ package identity
 
 // WebAuthnRegisterRequest is Webauthn Register request.
 type WebAuthnRegisterRequest struct {
+	ID                string             `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
+	Type              string             `json:"type,omitempty" xml:"type,omitempty" yaml:"type,omitempty"`
+	Transports        []string           `json:"transports,omitempty" xml:"transports,omitempty" yaml:"transports,omitempty"`
 	Success           bool               `json:"success,omitempty" xml:"success,omitempty" yaml:"success,omitempty"`
 	AttestationObject *AttestationObject `json:"attestationObject,omitempty" xml:"attestationObject,omitempty" yaml:"attestationObject,omitempty"`
 	ClientData        *ClientData        `json:"clientData,omitempty" xml:"clientData,omitempty" yaml:"clientData,omitempty"`
