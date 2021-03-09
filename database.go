@@ -295,7 +295,7 @@ func (db *Database) AddPublicKey(opts map[string]interface{}) error {
 	var username, email, payload, keyUsage, comment, fp string
 	for _, k := range []string{"username", "email", "key", "key_usage", "file_path"} {
 		if _, exists := opts[k]; !exists {
-			return fmt.Errorf("Password change required %s input field", k)
+			return fmt.Errorf("Required input field %s does not exist", k)
 		}
 		switch k {
 		case "username":
@@ -333,7 +333,7 @@ func (db *Database) GetPublicKeys(opts map[string]interface{}) ([]*PublicKey, er
 	var username, email, keyUsage string
 	for _, k := range []string{"username", "email", "key_usage"} {
 		if _, exists := opts[k]; !exists {
-			return nil, fmt.Errorf("Password change required %s input field", k)
+			return nil, fmt.Errorf("Required input field %s does not exist", k)
 		}
 		switch k {
 		case "username":
@@ -365,7 +365,7 @@ func (db *Database) DeletePublicKey(opts map[string]interface{}) error {
 	var username, email, keyID, fp string
 	for _, k := range []string{"username", "email", "key_id", "file_path"} {
 		if _, exists := opts[k]; !exists {
-			return fmt.Errorf("Password change required %s input field", k)
+			return fmt.Errorf("Required input field %s does not exist", k)
 		}
 		switch k {
 		case "username":
@@ -399,7 +399,7 @@ func (db *Database) ChangeUserPassword(opts map[string]interface{}) error {
 	var username, email, currentPassword, newPassword, fp string
 	for _, k := range []string{"username", "email", "current_password", "new_password", "file_path"} {
 		if _, exists := opts[k]; !exists {
-			return fmt.Errorf("Password change required %s input field", k)
+			return fmt.Errorf("Required input field %s does not exist", k)
 		}
 		switch k {
 		case "username":
@@ -438,9 +438,9 @@ func (db *Database) ChangeUserPassword(opts map[string]interface{}) error {
 // AddMfaToken adds MFA token for a user.
 func (db *Database) AddMfaToken(opts map[string]interface{}) error {
 	var username, email, fp string
-	for _, k := range []string{"username", "email", "secret", "file_path"} {
+	for _, k := range []string{"username", "email", "file_path"} {
 		if _, exists := opts[k]; !exists {
-			return fmt.Errorf("Password change required %s input field", k)
+			return fmt.Errorf("Required input field %s does not exist", k)
 		}
 		switch k {
 		case "username":
@@ -480,7 +480,7 @@ func (db *Database) GetMfaTokens(opts map[string]interface{}) ([]*MfaToken, erro
 	var username, email string
 	for _, k := range []string{"username", "email"} {
 		if _, exists := opts[k]; !exists {
-			return nil, fmt.Errorf("Password change required %s input field", k)
+			return nil, fmt.Errorf("Required input field %s does not exist", k)
 		}
 		switch k {
 		case "username":
@@ -510,7 +510,7 @@ func (db *Database) DeleteMfaToken(opts map[string]interface{}) error {
 	var username, email, tokenID, fp string
 	for _, k := range []string{"username", "email", "token_id", "file_path"} {
 		if _, exists := opts[k]; !exists {
-			return fmt.Errorf("Password change required %s input field", k)
+			return fmt.Errorf("Required input field %s does not exist", k)
 		}
 		switch k {
 		case "username":
