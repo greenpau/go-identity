@@ -28,11 +28,11 @@ import (
 	"testing"
 )
 
-func getPublicKey(pk *rsa.PrivateKey, keyType string) string {
+func getPublicKey(t *testing.T, pk *rsa.PrivateKey, keyType string) string {
 	// Derive Public Key
 	pubKeyBytes, err := x509.MarshalPKIXPublicKey(pk.Public())
 	if err != nil {
-		panic(err)
+		t.Fatalf("failed creating rsa public key: %v", err)
 	}
 
 	// Create PEM encoded string
@@ -46,16 +46,14 @@ func getPublicKey(pk *rsa.PrivateKey, keyType string) string {
 	// Create OpenSSH formatted string
 	pubKeyOpenSSH, err := ssh.NewPublicKey(pk.Public())
 	if err != nil {
-		panic(err)
+		t.Fatalf("failed creating openssh key: %v", err)
 	}
 	authorizedKeyBytes := ssh.MarshalAuthorizedKey(pubKeyOpenSSH)
 	switch keyType {
-	case "rsa":
-		return string(pubKeyEncoded)
 	case "openssh":
 		return string(authorizedKeyBytes)
 	}
-	panic("invalid key type " + keyType)
+	return string(pubKeyEncoded)
 }
 
 func TestNewPublicKey(t *testing.T) {
@@ -88,7 +86,7 @@ func TestNewPublicKey(t *testing.T) {
 				Key: requests.Key{
 					Usage:   "ssh",
 					Comment: "jsmith@outlook.com",
-					Payload: getPublicKey(pk, "rsa"),
+					Payload: "rsa",
 				},
 			},
 			want: map[string]interface{}{
@@ -102,7 +100,7 @@ func TestNewPublicKey(t *testing.T) {
 				Key: requests.Key{
 					Usage:   "ssh",
 					Comment: "jsmith@outlook.com",
-					Payload: getPublicKey(pk, "openssh"),
+					Payload: "openssh",
 				},
 			},
 			want: map[string]interface{}{
@@ -183,6 +181,11 @@ func TestNewPublicKey(t *testing.T) {
 			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
 			msgs = append(msgs, fmt.Sprintf("private rsa key:\n%s", string(pkm)))
 			// t.Logf("public key:\n%s", tc.req.Key.Payload)
+
+			if tc.req.Key.Payload == "rsa" || tc.req.Key.Payload == "openssh" {
+				tc.req.Key.Payload = getPublicKey(t, pk, tc.req.Key.Payload)
+			}
+
 			key, err := NewPublicKey(tc.req)
 			if tests.EvalErrWithLog(t, err, "new public key", tc.shouldErr, tc.err, msgs) {
 				return

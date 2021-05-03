@@ -16,23 +16,32 @@ package requests
 
 // Request hold the data associated with identity database requests.
 type Request struct {
+	User     User
+	Key      Key
+	MfaToken MfaToken
+	WebAuthn WebAuthn
+	Flags    Flags
+	Response interface{}
+}
+
+// User hold user attributes.
+type User struct {
 	Username    string
 	Email       string
 	Password    string
 	OldPassword string
-	Key         Key
-	MfaToken    MfaToken
-	WebAuthn    WebAuthn
-	Flags       Flags
-	Response    interface{}
+	FullName    string
+	Roles       []string
+	Disabled    bool
 }
 
 // Key holds crypto key attributes.
 type Key struct {
-	ID      string
-	Comment string
-	Usage   string
-	Payload string
+	ID       string
+	Comment  string
+	Usage    string
+	Payload  string
+	Disabled bool
 }
 
 // MfaToken holds MFA token attributes.
@@ -45,6 +54,7 @@ type MfaToken struct {
 	Period    int
 	Digits    int
 	Passcode  string
+	Disabled  bool
 }
 
 // WebAuthn holds WebAuthn messages.

@@ -36,6 +36,7 @@ var supportedPublicKeyTypes = map[string]bool{
 // PublicKeyBundle is a collection of public keys.
 type PublicKeyBundle struct {
 	keys []*PublicKey
+	size int
 }
 
 // PublicKey is a puiblic key in a public-private key pair.
@@ -66,11 +67,17 @@ func NewPublicKeyBundle() *PublicKeyBundle {
 // Add adds PublicKey to PublicKeyBundle.
 func (b *PublicKeyBundle) Add(k *PublicKey) {
 	b.keys = append(b.keys, k)
+	b.size++
 }
 
 // Get returns PublicKey instances of the PublicKeyBundle.
 func (b *PublicKeyBundle) Get() []*PublicKey {
 	return b.keys
+}
+
+// Size returns the number of PublicKey instances in PublicKeyBundle.
+func (b *PublicKeyBundle) Size() int {
+	return b.size
 }
 
 // NewPublicKey returns an instance of PublicKey.
@@ -84,6 +91,10 @@ func NewPublicKey(r *requests.Request) (*PublicKey, error) {
 	}
 	if err := p.parse(); err != nil {
 		return nil, err
+	}
+	if r.Key.Disabled {
+		p.Disabled = true
+		p.DisabledAt = time.Now().UTC()
 	}
 	return p, nil
 }

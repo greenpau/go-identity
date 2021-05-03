@@ -16,11 +16,26 @@ package identity
 
 import (
 	"fmt"
-	"path/filepath"
-	// "github.com/greenpau/go-identity/pkg/requests"
+	"github.com/google/go-cmp/cmp"
 	"github.com/greenpau/go-identity/internal/tests"
 	"github.com/greenpau/go-identity/pkg/errors"
+	"github.com/greenpau/go-identity/pkg/requests"
+	"path"
+	"path/filepath"
 	"testing"
+)
+
+var (
+	testUser1     = "jsmith"
+	testEmail1    = "jsmith@gmail.com"
+	testPwd1      = NewRandomString(12)
+	testFullName1 = "Smith, John"
+	testRoles1    = []string{"viewer", "editor", "admin"}
+	testUser2     = "bjones"
+	testEmail2    = "bjones@gmail.com"
+	testPwd2      = NewRandomString(16)
+	testFullName2 = ""
+	testRoles2    = []string{"viewer"}
 )
 
 func createTestDatabase(s string) (*Database, error) {
@@ -28,30 +43,41 @@ func createTestDatabase(s string) (*Database, error) {
 	if err != nil {
 		return nil, err
 	}
-	pwd1 := NewRandomString(12)
-	user1, err := NewUserWithRoles(
-		"jsmith", pwd1, "jsmith@gmail.com", "Smith, John",
-		[]string{"viewer", "editor", "admin"},
-	)
-	if err != nil {
-		return nil, err
+	reqs := []*requests.Request{
+		{
+			User: requests.User{
+				Username: testUser1,
+				Password: testPwd1,
+				Email:    testEmail1,
+				FullName: testFullName1,
+				Roles:    testRoles1,
+			},
+		},
+		{
+			User: requests.User{
+				Username: testUser2,
+				Password: testPwd2,
+				Email:    testEmail2,
+				FullName: testFullName2,
+				Roles:    testRoles2,
+			},
+		},
 	}
-	pwd2 := NewRandomString(16)
-	user2, err := NewUserWithRoles(
-		"greenp", pwd2, "greenp@gmail.com", "Green, Peter",
-		[]string{"viewer"},
-	)
-	if err != nil {
-		return nil, err
-	}
+
 	db, err := NewDatabase(filepath.Join(tmpDir, "user_db.json"))
 	if err != nil {
 		return nil, err
 	}
-	for _, u := range []*User{user1, user2} {
-		if err := db.AddUser(u); err != nil {
+
+	for _, req := range reqs {
+		if err := db.AddUser(req); err != nil {
 			return nil, err
 		}
+		user, err := db.getUser(req.User.Username)
+		if err != nil {
+			return nil, err
+		}
+		user.PublicKeys = append(user.PublicKeys, &PublicKey{})
 	}
 	return db, nil
 }
@@ -61,30 +87,30 @@ func TestNewDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	t.Logf("%v", tmpDir)
+	// t.Logf("%v", tmpDir)
 	passwd := NewRandomString(12)
 	testcases := []struct {
 		name      string
 		path      string
-		username  string
-		password  string
-		fullName  string
-		email     string
-		roles     []string
+		req       *requests.Request
 		backup    string
 		want      map[string]interface{}
 		shouldErr bool
 		err       error
 	}{
 		{
-			name:     "test create new database",
-			path:     filepath.Join(tmpDir, "user_db.json"),
-			username: "jsmith",
-			password: passwd,
-			fullName: "Smith, John",
-			email:    "jsmith@gmail.com",
-			roles:    []string{"viewer", "editor", "admin"},
-			backup:   filepath.Join(tmpDir, "user_db_backup.json"),
+			name: "test create new database",
+			path: filepath.Join(tmpDir, "user_db.json"),
+			req: &requests.Request{
+				User: requests.User{
+					Username: "jsmith",
+					Password: passwd,
+					Email:    "jsmith@gmail.com",
+					FullName: "Smith, John",
+					Roles:    []string{"viewer", "editor", "admin"},
+				},
+			},
+			backup: filepath.Join(tmpDir, "user_db_backup.json"),
 			want: map[string]interface{}{
 				"path":       filepath.Join(tmpDir, "user_db.json"),
 				"user_count": 0,
@@ -110,25 +136,18 @@ func TestNewDatabase(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			var user *User
 			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
 			msgs = append(msgs, fmt.Sprintf("temporary directory: %s", tmpDir))
-			if tc.username != "" {
-				user, err = NewUserWithRoles(tc.username, tc.password, tc.email, tc.fullName, tc.roles)
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
 			db, err := NewDatabase(tc.path)
 			if tests.EvalErrWithLog(t, err, "new database", tc.shouldErr, tc.err, msgs) {
 				return
 			}
 			got := make(map[string]interface{})
 			got["path"] = db.GetPath()
-			got["user_count"] = len(db.Users)
+			got["user_count"] = db.GetUserCount()
 			tests.EvalObjectsWithLog(t, "eval", tc.want, got, msgs)
-			if tc.username != "" {
-				if err := db.AddUser(user); err != nil {
+			if tc.req != nil {
+				if err := db.AddUser(tc.req); err != nil {
 					tests.EvalErrWithLog(t, err, "add user", tc.shouldErr, tc.err, msgs)
 				}
 			}
@@ -149,145 +168,933 @@ func TestDatabaseAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	t.Logf("%v", db.path)
+	// t.Logf("%v", db.path)
 
 	testcases := []struct {
 		name      string
+		req       *requests.Request
 		want      map[string]interface{}
 		shouldErr bool
 		err       error
 	}{
 		{
-			name: "authenticate valid user",
-			want: map[string]interface{}{
-				"user_count": 0,
+			name: "authenticate user1 with username",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Password: testPwd1,
+				},
 			},
+			want: map[string]interface{}{
+				"claims": map[string]interface{}{
+					"mail":  "jsmith@gmail.com",
+					"name":  "Smith, John",
+					"roles": "viewer editor admin",
+					"sub":   "jsmith",
+				},
+			},
+		},
+		{
+			name: "authenticate user2 with username",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser2,
+					Password: testPwd2,
+				},
+				Flags: requests.Flags{
+					Enabled: true,
+				},
+			},
+			want: map[string]interface{}{
+				"claims": map[string]interface{}{
+					"mail":  "bjones@gmail.com",
+					"roles": "viewer",
+					"sub":   "bjones",
+				},
+			},
+		},
+		{
+			name: "authenticate user1 with email address",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testEmail1,
+					Password: testPwd1,
+				},
+			},
+			want: map[string]interface{}{
+				"claims": map[string]interface{}{
+					"mail":  "jsmith@gmail.com",
+					"name":  "Smith, John",
+					"roles": "viewer editor admin",
+					"sub":   "jsmith",
+				},
+			},
+		},
+		{
+			name: "authenticate user2 with email address",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testEmail2,
+					Password: testPwd2,
+				},
+			},
+			want: map[string]interface{}{
+				"claims": map[string]interface{}{
+					"mail":  "bjones@gmail.com",
+					"roles": "viewer",
+					"sub":   "bjones",
+				},
+			},
+		},
+		{
+			name: "authenticate user1 with username and invalid password",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Password: testPwd2,
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrAuthFailed.WithArgs(errors.ErrUserPasswordInvalid),
+		},
+		{
+			name: "authenticate user1 with email address and invalid password",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testEmail1,
+					Password: testPwd2,
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrAuthFailed.WithArgs(errors.ErrUserPasswordInvalid),
+		},
+		{
+			name: "authenticate with invalid username",
+			req: &requests.Request{
+				User: requests.User{
+					Username: "foobar",
+					Password: "barfoo",
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrAuthFailed.WithArgs(errors.ErrDatabaseUserNotFound),
+		},
+		{
+			name: "perform dummy authentication",
+			req: &requests.Request{
+				User: requests.User{
+					Username: "foobar",
+					Password: "barfoo",
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrAuthFailed.WithArgs(errors.ErrDatabaseUserNotFound),
 		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
+			var err error
 			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
 			msgs = append(msgs, fmt.Sprintf("database path: %s", db.path))
-			/*
-				if tests.EvalErrWithLog(t, err, "new database", tc.shouldErr, tc.err, msgs) {
-					return
-				}
-				got := make(map[string]interface{})
-				got["path"] = db.GetPath()
-				got["user_count"] = len(db.Users)
-				tests.EvalObjectsWithLog(t, "eval", tc.want, got, msgs)
-				if tc.username != "" {
-					if err := db.AddUser(user); err != nil {
-						tests.EvalErrWithLog(t, err, "add user", tc.shouldErr, tc.err, msgs)
-					}
-				}
-				if err := db.Save(); err != nil {
-					t.Fatal(err)
-				}
-				if tc.backup != "" {
-					if err := db.Copy(tc.backup); err != nil {
-						t.Fatal(err)
-					}
-				}
-			*/
+			err = db.AuthenticateUser(tc.req)
+			if tests.EvalErrWithLog(t, err, "authenticate", tc.shouldErr, tc.err, msgs) {
+				return
+			}
+			got := make(map[string]interface{})
+			got["claims"] = tc.req.Response
+			tests.EvalObjectsWithLog(t, "eval", tc.want, got, msgs)
+
+			user, err := db.getUser(tc.req.User.Username)
+			if err != nil {
+				t.Fatal(err)
+			}
+			userByID, err := db.getUserByID(user.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(user, userByID, cmp.AllowUnexported(User{}, EmailAddress{})); diff != "" {
+				tests.WriteLog(t, msgs)
+				t.Fatalf("user by username and id mismatch (-want +got):\n%s", diff)
+			}
+
+			_, err = db.getUserByID("foobar")
+			if tests.EvalErrWithLog(t, err, "authenticate", true, errors.ErrDatabaseUserNotFound, msgs) {
+				return
+			}
 		})
 	}
 }
 
-/*
-	var req *requests.Request
-	db, err := NewDatabase("assets/tests/userdb.json")
+func TestDatabaseAddUser(t *testing.T) {
+	var databasePath string
+	db, err := createTestDatabase("TestDatabaseAddUser")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	user := NewUser("jsmith")
-	email := "jsmith@gmail.com"
-	//password := "jsmith123"
-	//newPassword := "johnsmith123"
-	password := NewRandomString(12)
-	newPassword := NewRandomString(16)
-	name := &Name{
-		First: "John",
-		Last:  "Smith",
-	}
-	t.Logf("Username: %s", user.Username)
-	t.Logf("Password: %s", password)
+	databasePath = db.path
+	// t.Logf("%v", db.path)
+	testcases := []struct {
+		name          string
+		req           *requests.Request
+		overwritePath string
+		want          map[string]interface{}
+		shouldErr     bool
+		err           error
+	}{
+		{
+			name: "add user with used username",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Password: testPwd1,
+					Email:    testEmail1,
+					FullName: testFullName1,
+					Roles:    testRoles1,
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrAddUser.WithArgs(testUser1, "username already in use"),
+		},
+		{
+			name: "add user with empty username",
+			req: &requests.Request{
+				User: requests.User{
+					Username: "",
+					Email:    "foobar@barfoo",
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrAddUser.WithArgs("", errors.ErrPasswordEmpty),
+		},
+		{
+			name: "add user with used email",
+			req: &requests.Request{
+				User: requests.User{
+					Username: "foobar",
+					Password: testPwd1,
+					Email:    testEmail1,
+					FullName: testFullName1,
+					Roles:    testRoles1,
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrAddUser.WithArgs(testEmail1, "email address already in use"),
+		},
 
-	if err := user.AddPassword(password); err != nil {
-		t.Fatalf("failed adding password: %s", err)
+		{
+			name: "fail committing after adding new user",
+			req: &requests.Request{
+				User: requests.User{
+					Username: "foobar",
+					Password: NewRandomString(16),
+					Email:    "foobar@barfoo",
+				},
+			},
+			overwritePath: path.Base(databasePath),
+			shouldErr:     true,
+			err:           errors.ErrAddUser.WithArgs("foobar", errors.ErrDatabaseCommit.WithArgs("user_db.json", "open user_db.json: is a directory")),
+		},
 	}
-	if err := user.AddEmailAddress(email); err != nil {
-		t.Fatalf("failed adding email address: %s", err)
-	}
-
-	if err := user.AddName(name); err != nil {
-		t.Fatalf("failed adding name: %s", err)
-	}
-
-	for _, roleName := range []string{"viewer", "editor", "admin"} {
-		if err := user.AddRole(roleName); err != nil {
-			t.Fatalf("failed adding role: %s", err)
-		}
-	}
-
-	expUserFullName := "Smith, John"
-	userFullName := user.GetFullName()
-	if userFullName != expUserFullName {
-		t.Fatalf("the expected user full name %s does not match the returned '%s'", expUserFullName, userFullName)
-	}
-
-	t.Logf("User full name: %s", userFullName)
-	t.Logf("User mail claim: %s", user.GetMailClaim())
-	t.Logf("User name claim: %s", user.GetNameClaim())
-	t.Logf("User roles claim: %v", user.GetRolesClaim())
-
-	if err := db.AddUser(user); err != nil {
-		t.Fatalf("failed adding user %v to user database: %s", user, err)
-	}
-
-	req = &requests.Request{Username: user.Username, Password: password}
-	if err := db.AuthenticateUser(req); err != nil {
-		t.Fatalf("error authenticating user %s: %v", user.Username, err)
-	}
-	t.Logf("Response: %v", req.Response)
-
-	prevPassword := password
-	for i := 0; i < 15; i++ {
-		if i != 0 {
-			prevPassword = newPassword
-		}
-		newPassword = NewRandomString(16)
-		req = &requests.Request{
-			Username:    user.Username,
-			Email:       email,
-			OldPassword: prevPassword,
-			Password:    newPassword,
-		}
-		if err := db.ChangeUserPassword(req); err != nil {
-			t.Fatalf("error changing user %q password: %v", user.Username, err)
-		}
-		t.Logf("User %q password has changed", user.Username)
-	}
-
-	req = &requests.Request{Username: user.Username, Password: prevPassword}
-	if err := db.AuthenticateUser(req); err == nil {
-		t.Fatalf("expected authentication failure, but got success")
-	}
-
-	req = &requests.Request{Username: user.Username, Password: newPassword}
-	if err := db.AuthenticateUser(req); err != nil {
-		t.Fatalf("expected authentication success, but got failure: %s", err)
-	}
-
-	t.Logf("User claims: %v", req.Response)
-
-	dbUser, err := db.GetUserByUsername(user.Username)
-	if err != nil {
-		t.Fatalf("expected valid user, got error: %s", err)
-	}
-	expectedPasswordCount := 10
-	if len(dbUser.Passwords) != expectedPasswordCount {
-		t.Fatalf("expected password count of %d, received %d", expectedPasswordCount, len(dbUser.Passwords))
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			var err error
+			db.path = databasePath
+			if tc.overwritePath != "" {
+				db.path = tc.overwritePath
+			}
+			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
+			msgs = append(msgs, fmt.Sprintf("database path: %s", db.path))
+			err = db.AddUser(tc.req)
+			if tests.EvalErrWithLog(t, err, "add user", tc.shouldErr, tc.err, msgs) {
+				return
+			}
+			got := make(map[string]interface{})
+			got["user_count"] = len(db.Users)
+			tests.EvalObjectsWithLog(t, "user passwords", tc.want, got, msgs)
+		})
 	}
 }
-*/
+
+func TestDatabaseChangeUserPassword(t *testing.T) {
+	var databasePath string
+	db, err := createTestDatabase("TestDatabaseChangeUserPassword")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	databasePath = db.path
+	// t.Logf("%v", db.path)
+	testcases := []struct {
+		name          string
+		req           *requests.Request
+		overwritePath string
+		want          map[string]interface{}
+		shouldErr     bool
+		err           error
+	}{
+		{
+			name: "change user1 password with invalid current password",
+			req: &requests.Request{
+				User: requests.User{
+					Username:    testUser1,
+					Email:       testEmail1,
+					OldPassword: "foobar",
+					Password:    NewRandomString(16),
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrChangeUserPassword.WithArgs(errors.ErrUserPasswordInvalid),
+		},
+		{
+			name: "change user1 password",
+			req: &requests.Request{
+				User: requests.User{
+					Username:    testUser1,
+					Email:       testEmail1,
+					OldPassword: testPwd1,
+					Password:    NewRandomString(16),
+				},
+			},
+			want: map[string]interface{}{
+				"password_count": 2,
+			},
+		},
+		{
+			name: "change password of invalid user",
+			req: &requests.Request{
+				User: requests.User{
+					Username:    "foobar",
+					Email:       "foobar@barfoo",
+					OldPassword: "foobar",
+					Password:    NewRandomString(16),
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrChangeUserPassword.WithArgs(errors.ErrDatabaseUserNotFound),
+		},
+		{
+			name: "fail committing after change user2 password",
+			req: &requests.Request{
+				User: requests.User{
+					Username:    testUser2,
+					Email:       testEmail2,
+					OldPassword: testPwd2,
+					Password:    NewRandomString(16),
+				},
+			},
+			overwritePath: path.Base(databasePath),
+			shouldErr:     true,
+			err:           errors.ErrChangeUserPassword.WithArgs(errors.ErrDatabaseCommit.WithArgs("user_db.json", "open user_db.json: is a directory")),
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			var err error
+			db.path = databasePath
+			if tc.overwritePath != "" {
+				db.path = tc.overwritePath
+			}
+			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
+			msgs = append(msgs, fmt.Sprintf("database path: %s", db.path))
+
+			err = db.ChangeUserPassword(tc.req)
+			if tests.EvalErrWithLog(t, err, "change password", tc.shouldErr, tc.err, msgs) {
+				return
+			}
+
+			req := &requests.Request{User: requests.User{Username: tc.req.User.Username, Password: tc.req.User.Password}}
+			if err := db.AuthenticateUser(req); err != nil {
+				t.Fatalf("expected authentication success, but got failure: %v", err)
+			}
+
+			user, err := db.getUser(tc.req.User.Username)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := make(map[string]interface{})
+			got["password_count"] = len(user.Passwords)
+			tests.EvalObjectsWithLog(t, "user passwords", tc.want, got, msgs)
+		})
+	}
+}
+
+func TestDatabaseUserPublicKey(t *testing.T) {
+	var databasePath string
+	db, err := createTestDatabase("TestDatabaseUserPublicKey")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	databasePath = db.path
+	testcases := []struct {
+		name           string
+		operation      string
+		usage          string
+		overwriteUsage string
+		overwritePath  string
+		keyID          string
+		keyAlgorithm   string
+		pubKeyType     string
+		comment        string
+		username       string
+		email          string
+		want           map[string]interface{}
+		shouldErr      bool
+		err            error
+	}{
+		{
+			name:         "add disabled openssh public key",
+			operation:    "add",
+			usage:        "ssh",
+			keyAlgorithm: "rsa",
+			pubKeyType:   "openssh",
+			comment:      testEmail1,
+			username:     testUser1,
+			email:        testEmail1,
+			want: map[string]interface{}{
+				"key_count": 1,
+			},
+		},
+
+		{
+			name:         "add openssh public key",
+			operation:    "add",
+			usage:        "ssh",
+			keyAlgorithm: "rsa",
+			pubKeyType:   "openssh",
+			comment:      testEmail1,
+			username:     testUser1,
+			email:        testEmail1,
+			want: map[string]interface{}{
+				"key_count": 2,
+			},
+		},
+		{
+			name:         "add rsa public key",
+			operation:    "add",
+			usage:        "ssh",
+			keyAlgorithm: "rsa",
+			pubKeyType:   "openssh",
+			comment:      testEmail1,
+			username:     testUser1,
+			email:        testEmail1,
+			want: map[string]interface{}{
+				"key_count": 3,
+			},
+		},
+		{
+			name:      "delete all public keys",
+			operation: "delete",
+			username:  testUser1,
+			email:     testEmail1,
+			usage:     "ssh",
+			want: map[string]interface{}{
+				"key_count": 0,
+			},
+		},
+		{
+			name:         "readd rsa public key",
+			operation:    "add",
+			usage:        "ssh",
+			keyAlgorithm: "rsa",
+			pubKeyType:   "openssh",
+			comment:      testEmail1,
+			username:     testUser1,
+			email:        testEmail1,
+			want: map[string]interface{}{
+				"key_count": 1,
+			},
+		},
+		{
+			name:      "delete non-existing public key",
+			operation: "delete",
+			username:  testUser1,
+			email:     testEmail1,
+			usage:     "ssh",
+			keyID:     "foobar",
+			shouldErr: true,
+			err:       errors.ErrDeletePublicKey.WithArgs("foobar", "not found"),
+		},
+		{
+			name:         "add rsa public key with non-existing username",
+			operation:    "add",
+			username:     "foobar",
+			email:        "foobar@barfoo",
+			usage:        "ssh",
+			keyAlgorithm: "rsa",
+			pubKeyType:   "openssh",
+			shouldErr:    true,
+			err:          errors.ErrAddPublicKey.WithArgs("ssh", errors.ErrDatabaseUserNotFound),
+		},
+		{
+			name:         "add rsa public key with mismatch user and email",
+			operation:    "add",
+			username:     testUser1,
+			email:        testEmail2,
+			usage:        "ssh",
+			keyAlgorithm: "rsa",
+			pubKeyType:   "openssh",
+			shouldErr:    true,
+			err:          errors.ErrAddPublicKey.WithArgs("ssh", errors.ErrDatabaseInvalidUser),
+		},
+		{
+			name:         "add rsa public key with non-existing email address",
+			operation:    "add",
+			username:     testUser1,
+			email:        "foobar@barfoo",
+			usage:        "ssh",
+			keyAlgorithm: "rsa",
+			pubKeyType:   "openssh",
+			shouldErr:    true,
+			err:          errors.ErrAddPublicKey.WithArgs("ssh", errors.ErrDatabaseUserNotFound),
+		},
+		{
+			name:         "get public keys with non-existing email address",
+			operation:    "get",
+			username:     testUser1,
+			email:        "foobar@barfoo",
+			usage:        "ssh",
+			keyAlgorithm: "rsa",
+			pubKeyType:   "openssh",
+			shouldErr:    true,
+			err:          errors.ErrGetPublicKeys.WithArgs("ssh", errors.ErrDatabaseUserNotFound),
+		},
+
+		{
+			name:         "delete public key with non-existing email address",
+			operation:    "delete",
+			username:     testUser1,
+			email:        "foobar@barfoo",
+			usage:        "ssh",
+			keyAlgorithm: "rsa",
+			shouldErr:    true,
+			keyID:        "barfoo",
+			err:          errors.ErrDeletePublicKey.WithArgs("barfoo", errors.ErrDatabaseUserNotFound),
+		},
+		{
+			name:           "add invalid public key usage",
+			operation:      "add",
+			username:       testUser1,
+			email:          testEmail1,
+			usage:          "ssh",
+			overwriteUsage: "foobar",
+			keyAlgorithm:   "rsa",
+			pubKeyType:     "openssh",
+			shouldErr:      true,
+			err:            errors.ErrAddPublicKey.WithArgs("foobar", errors.ErrPublicKeyInvalidUsage.WithArgs("foobar")),
+		},
+		{
+			name:          "fail to commit when adding rsa public key",
+			operation:     "add",
+			usage:         "ssh",
+			keyAlgorithm:  "rsa",
+			pubKeyType:    "openssh",
+			comment:       testEmail1,
+			username:      testUser1,
+			email:         testEmail1,
+			overwritePath: path.Base(databasePath),
+			shouldErr:     true,
+			err:           errors.ErrAddPublicKey.WithArgs("ssh", errors.ErrDatabaseCommit.WithArgs("user_db.json", "open user_db.json: is a directory")),
+		},
+		{
+			name:          "fail to commit when deleting rsa public key",
+			operation:     "delete",
+			username:      testUser1,
+			email:         testEmail1,
+			usage:         "ssh",
+			overwritePath: path.Base(databasePath),
+			shouldErr:     true,
+			err:           errors.ErrDeletePublicKey.WithArgs("ssh", errors.ErrDatabaseCommit.WithArgs("user_db.json", "open user_db.json: is a directory")),
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			var err error
+			db.path = databasePath
+			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
+			msgs = append(msgs, fmt.Sprintf("database path: %s", db.path))
+			switch tc.operation {
+			case "add":
+				r := requests.NewRequest()
+				r.User.Username = tc.username
+				r.User.Email = tc.email
+				r.Key.Usage = tc.usage
+				r.Key.Comment = tc.comment
+				_, publicKey := tests.GetCryptoKeyPair(t, tc.keyAlgorithm, tc.pubKeyType)
+				r.Key.Payload = publicKey
+				if tc.overwriteUsage != "" {
+					r.Key.Usage = tc.overwriteUsage
+				}
+				if tc.overwritePath != "" {
+					db.path = tc.overwritePath
+				}
+				err = db.AddPublicKey(r)
+				if tests.EvalErrWithLog(t, err, "add public key", tc.shouldErr, tc.err, msgs) {
+					return
+				}
+			case "get":
+			case "delete":
+				r := requests.NewRequest()
+				r.User.Username = tc.username
+				r.User.Email = tc.email
+				r.Key.Usage = tc.usage
+				err = db.GetPublicKeys(r)
+				if tc.keyID != "" {
+					// Delete specific key.
+					r.Key.ID = tc.keyID
+					err = db.DeletePublicKey(r)
+					if tests.EvalErrWithLog(t, err, "delete public key by id", tc.shouldErr, tc.err, msgs) {
+						return
+					}
+					break
+				}
+				// Delete all keys.
+				if tc.overwritePath != "" {
+					db.path = tc.overwritePath
+				}
+				bundle := r.Response.(*PublicKeyBundle)
+				var arr []string
+				for _, k := range bundle.Get() {
+					arr = append(arr, k.ID)
+				}
+				for _, k := range arr {
+					r.Key.ID = k
+					err = db.DeletePublicKey(r)
+					if tests.EvalErrWithLog(t, err, "delete public key", tc.shouldErr, tc.err, msgs) {
+						return
+					}
+				}
+			case "":
+				t.Fatal("empty test operation")
+			default:
+				t.Fatalf("unsupported test operation: %s", tc.operation)
+			}
+
+			r := requests.NewRequest()
+			r.User.Username = tc.username
+			r.User.Email = tc.email
+			r.Key.Usage = tc.usage
+			err = db.GetPublicKeys(r)
+			if tests.EvalErrWithLog(t, err, "get public keys", tc.shouldErr, tc.err, msgs) {
+				return
+			}
+			bundle := r.Response.(*PublicKeyBundle)
+			got := make(map[string]interface{})
+			got["key_count"] = bundle.Size()
+			tests.EvalObjectsWithLog(t, "user", tc.want, got, msgs)
+		})
+	}
+}
+
+func TestDatabaseUserMfaToken(t *testing.T) {
+	var databasePath string
+	db, err := createTestDatabase("TestDatabaseUserMfaToken")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	databasePath = db.path
+	/*
+	   t.Logf("%v", db.path)
+	   for _, u := range db.Users {
+	           for _, n := range u.Names {
+	                   t.Logf("user %s, name: %v", u.Username, n)
+	           }
+	           for _, p := range u.Passwords {
+	                   t.Logf("user %s, password: %v", u.Username, p)
+	           }
+	   }
+	*/
+
+	testcases := []struct {
+		name          string
+		operation     string
+		req           *requests.Request
+		overwritePath string
+		want          map[string]interface{}
+		shouldErr     bool
+		err           error
+	}{
+		{
+			name:      "add disabled totp app token with sha1",
+			operation: "add",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Email:    testEmail1,
+				},
+				MfaToken: requests.MfaToken{
+					Comment:   "ms auth app 30",
+					Type:      "totp",
+					Secret:    "c71ca4c68bc14ec5b4ab8d3c3be02ddd2c",
+					Algorithm: "sha1",
+					Period:    30,
+					Digits:    6,
+					Disabled:  true,
+				},
+			},
+			want: map[string]interface{}{
+				"token_count": 0,
+			},
+		},
+		{
+			name:      "add totp app token with sha1",
+			operation: "add",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Email:    testEmail1,
+				},
+				MfaToken: requests.MfaToken{
+					Comment:   "ms auth app",
+					Type:      "totp",
+					Secret:    "c71ca4c68bc14ec5b4ab8d3c3b63802c",
+					Algorithm: "sha1",
+					Period:    30,
+					Digits:    6,
+				},
+			},
+			want: map[string]interface{}{
+				"token_count": 1,
+			},
+		},
+		{
+			name:      "remove all mfa tokens",
+			operation: "delete",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Email:    testEmail1,
+				},
+				MfaToken: requests.MfaToken{},
+			},
+			want: map[string]interface{}{
+				"token_count": 0,
+			},
+		},
+		{
+			name:      "readd totp app token with sha1",
+			operation: "add",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Email:    testEmail1,
+				},
+				MfaToken: requests.MfaToken{
+					Comment:   "ms auth app",
+					Type:      "totp",
+					Secret:    "c71ca4c68bc14ec5b4ab8d3c3b63802c",
+					Algorithm: "sha1",
+					Period:    30,
+					Digits:    6,
+				},
+			},
+			want: map[string]interface{}{
+				"token_count": 1,
+			},
+		},
+		{
+			name:      "delete non-existing mfa token",
+			operation: "delete",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Email:    testEmail1,
+				},
+				MfaToken: requests.MfaToken{
+					ID: "foobar",
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrDeleteMfaToken.WithArgs("foobar", "not found"),
+		},
+		{
+			name:      "add token with non-existing username",
+			operation: "add",
+			req: &requests.Request{
+				User: requests.User{
+					Username: "foobar",
+					Email:    "foobar@barfoo",
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrAddMfaToken.WithArgs(errors.ErrDatabaseUserNotFound),
+		},
+		{
+			name:      "add token with duplicate secret",
+			operation: "add",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Email:    testEmail1,
+				},
+				MfaToken: requests.MfaToken{
+					Comment:   "ms auth app",
+					Type:      "totp",
+					Secret:    "c71ca4c68bc14ec5b4ab8d3c3b63802c",
+					Algorithm: "sha1",
+					Period:    30,
+					Digits:    6,
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrAddMfaToken.WithArgs(errors.ErrDuplicateMfaTokenSecret),
+		},
+		{
+			name:      "add token with duplicate comment",
+			operation: "add",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Email:    testEmail1,
+				},
+				MfaToken: requests.MfaToken{
+					Comment:   "ms auth app",
+					Type:      "totp",
+					Secret:    "d71ca4c68bc14ec5b4ab8d3c3b63802c1",
+					Algorithm: "sha1",
+					Period:    30,
+					Digits:    6,
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrAddMfaToken.WithArgs(errors.ErrDuplicateMfaTokenComment),
+		},
+
+		{
+			name:      "get tokens with mismatch user and email",
+			operation: "get",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Email:    testEmail2,
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrGetMfaTokens.WithArgs(errors.ErrDatabaseInvalidUser),
+		},
+
+		{
+			name:      "delete mfa token with mismatch user and email",
+			operation: "delete",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Email:    testEmail2,
+				},
+				MfaToken: requests.MfaToken{
+					ID: "foobar",
+				},
+			},
+			shouldErr: true,
+			err:       errors.ErrDeleteMfaToken.WithArgs("foobar", errors.ErrDatabaseInvalidUser),
+		},
+		{
+			name:      "fail to commit when adding mfa token",
+			operation: "add",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Email:    testEmail1,
+				},
+				MfaToken: requests.MfaToken{
+					Comment:   "ms auth app 20",
+					Type:      "totp",
+					Secret:    "dd71ca4c68bc14ec5b4ab8d3c3b63802c",
+					Algorithm: "sha1",
+					Period:    30,
+					Digits:    6,
+				},
+			},
+			overwritePath: path.Base(databasePath),
+			shouldErr:     true,
+			err:           errors.ErrAddMfaToken.WithArgs(errors.ErrDatabaseCommit.WithArgs("user_db.json", "open user_db.json: is a directory")),
+		},
+		{
+			name:      "fail to commit when deleting mfa token",
+			operation: "delete",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Email:    testEmail1,
+				},
+				MfaToken: requests.MfaToken{
+					ID: "zzzzzzzzzzzzzzzzzzzzzzzzzz5h3s765Tpx5Laa",
+				},
+			},
+			overwritePath: path.Base(databasePath),
+			shouldErr:     true,
+			err: errors.ErrDeleteMfaToken.WithArgs("zzzzzzzzzzzzzzzzzzzzzzzzzz5h3s765Tpx5Laa",
+				errors.ErrDatabaseCommit.WithArgs("user_db.json", "open user_db.json: is a directory"),
+			),
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			var err error
+			db.path = databasePath
+			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
+			msgs = append(msgs, fmt.Sprintf("database path: %s", db.path))
+			switch tc.operation {
+			case "add":
+				if tc.overwritePath != "" {
+					db.path = tc.overwritePath
+				}
+				if tc.req.MfaToken.Type == "totp" && tc.req.MfaToken.Passcode == "" {
+					if err := generateTestPasscode(tc.req, true); err != nil {
+						t.Fatalf("unexpected failure during passcode generation: %v", err)
+					}
+				}
+				err = db.AddMfaToken(tc.req)
+				if tests.EvalErrWithLog(t, err, "add mfa token", tc.shouldErr, tc.err, msgs) {
+					return
+				}
+			case "get":
+			case "delete":
+				if tc.overwritePath != "" {
+					db.path = tc.overwritePath
+				}
+				err = db.GetMfaTokens(tc.req)
+				if tc.req.MfaToken.ID != "" {
+					// Delete specific key.
+					if tc.req.MfaToken.ID == "zzzzzzzzzzzzzzzzzzzzzzzzzz5h3s765Tpx5Laa" {
+						user, err := db.getUser(tc.req.User.Username)
+						if err != nil {
+							t.Fatal(err)
+						}
+						token := user.MfaTokens[0]
+						token.ID = tc.req.MfaToken.ID
+					}
+					err = db.DeleteMfaToken(tc.req)
+					if tests.EvalErrWithLog(t, err, "delete mfa token by id", tc.shouldErr, tc.err, msgs) {
+						return
+					}
+					break
+				}
+				// Delete all keys.
+				bundle := tc.req.Response.(*MfaTokenBundle)
+				var arr []string
+				for _, k := range bundle.Get() {
+					arr = append(arr, k.ID)
+				}
+				for _, k := range arr {
+					tc.req.MfaToken.ID = k
+					err = db.DeleteMfaToken(tc.req)
+					if tests.EvalErrWithLog(t, err, "delete mfa token", tc.shouldErr, tc.err, msgs) {
+						return
+					}
+				}
+			case "":
+				t.Fatal("empty test operation")
+			default:
+				t.Fatalf("unsupported test operation: %s", tc.operation)
+			}
+
+			err = db.GetMfaTokens(tc.req)
+			if tests.EvalErrWithLog(t, err, "get mfa tokens", tc.shouldErr, tc.err, msgs) {
+				return
+			}
+			bundle := tc.req.Response.(*MfaTokenBundle)
+			got := make(map[string]interface{})
+			got["token_count"] = bundle.Size()
+			tests.EvalObjectsWithLog(t, "output", tc.want, got, msgs)
+		})
+	}
+}

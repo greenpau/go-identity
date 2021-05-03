@@ -67,6 +67,20 @@ func NewUserWithRoles(username, password, email, fullName string, roles []string
 	if err := user.AddRoles(roles); err != nil {
 		return nil, err
 	}
+	fullName = strings.TrimSpace(fullName)
+	if fullName != "" {
+		name, err := ParseName(fullName)
+		if err != nil {
+			return nil, err
+		}
+		err = user.AddName(name)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := user.Valid(); err != nil {
+		return nil, err
+	}
 	return user, nil
 }
 
@@ -273,7 +287,7 @@ func (user *User) AddName(name *Name) error {
 func (user *User) AddPublicKey(r *requests.Request) error {
 	key, err := NewPublicKey(r)
 	if err != nil {
-		return err
+		return errors.ErrAddPublicKey.WithArgs(r.Key.Usage, err)
 	}
 	for _, k := range user.PublicKeys {
 		if k.Type != key.Type {
@@ -310,14 +324,14 @@ func (user *User) DeletePublicKey(r *requests.Request) error {
 func (user *User) AddMfaToken(r *requests.Request) error {
 	token, err := NewMfaToken(r)
 	if err != nil {
-		return err
+		return errors.ErrAddMfaToken.WithArgs(err)
 	}
 	for _, k := range user.MfaTokens {
 		if k.Secret == token.Secret {
-			return errors.ErrDuplicateMfaTokenSecret
+			return errors.ErrAddMfaToken.WithArgs(errors.ErrDuplicateMfaTokenSecret)
 		}
 		if k.Comment == token.Comment {
-			return errors.ErrDuplicateMfaTokenComment
+			return errors.ErrAddMfaToken.WithArgs(errors.ErrDuplicateMfaTokenComment)
 		}
 	}
 	user.MfaTokens = append(user.MfaTokens, token)
@@ -362,10 +376,10 @@ func (user *User) GetFlags(r *requests.Request) {
 
 // ChangePassword changes user password.
 func (user *User) ChangePassword(r *requests.Request) error {
-	if err := user.VerifyPassword(r.OldPassword); err != nil {
+	if err := user.VerifyPassword(r.User.OldPassword); err != nil {
 		return errors.ErrChangeUserPassword.WithArgs(err)
 	}
-	if err := user.AddPassword(r.Password); err != nil {
+	if err := user.AddPassword(r.User.Password); err != nil {
 		return errors.ErrChangeUserPassword.WithArgs(err)
 	}
 	return nil

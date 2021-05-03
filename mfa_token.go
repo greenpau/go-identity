@@ -36,6 +36,7 @@ import (
 // MfaTokenBundle is a collection of public keys.
 type MfaTokenBundle struct {
 	tokens []*MfaToken
+	size   int
 }
 
 // MfaToken is a puiblic key in a public-private key pair.
@@ -73,11 +74,17 @@ func NewMfaTokenBundle() *MfaTokenBundle {
 // Add adds MfaToken to MfaTokenBundle.
 func (b *MfaTokenBundle) Add(k *MfaToken) {
 	b.tokens = append(b.tokens, k)
+	b.size++
 }
 
 // Get returns MfaToken instances of the MfaTokenBundle.
 func (b *MfaTokenBundle) Get() []*MfaToken {
 	return b.tokens
+}
+
+// Size returns the number of MfaToken instances in MfaTokenBundle.
+func (b *MfaTokenBundle) Size() int {
+	return b.size
 }
 
 // NewMfaToken returns an instance of MfaToken.
@@ -88,6 +95,11 @@ func NewMfaToken(req *requests.Request) (*MfaToken, error) {
 		Parameters: make(map[string]string),
 		Comment:    req.MfaToken.Comment,
 		Type:       req.MfaToken.Type,
+	}
+
+	if req.MfaToken.Disabled {
+		p.Disabled = true
+		p.DisabledAt = time.Now().UTC()
 	}
 
 	switch p.Type {

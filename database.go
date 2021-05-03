@@ -134,11 +134,16 @@ func (db *Database) GetPath() string {
 }
 
 // AddUser adds user identity to the database.
-func (db *Database) AddUser(user *User) error {
+func (db *Database) AddUser(r *requests.Request) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	if err := user.Valid(); err != nil {
-		return err
+	user, err := NewUserWithRoles(
+		r.User.Username, r.User.Password,
+		r.User.Email, r.User.FullName,
+		r.User.Roles,
+	)
+	if err != nil {
+		return errors.ErrAddUser.WithArgs(r.User.Username, err)
 	}
 	for i := 0; i < 10; i++ {
 		id := NewID()
@@ -174,32 +179,22 @@ func (db *Database) AddUser(user *User) error {
 	return nil
 }
 
-// AuthenticateDummyUser performs password validation for a user supplied password.
-func (db *Database) AuthenticateDummyUser(password string) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	u := NewUser("dummy")
-	u.AddPassword(password)
-	return
-}
-
 // AuthenticateUser adds user identity to the database.
 func (db *Database) AuthenticateUser(r *requests.Request) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
-	username := strings.ToLower(r.Username)
-	if _, exists := db.refUsername[username]; !exists {
-		return errors.ErrAuthFailed.WithArgs("user not found")
+	user, err := db.getUser(r.User.Username)
+	if err != nil {
+		// Calculate password hash as the means to prevent user discovery.
+		NewPassword(r.User.Password)
+		return errors.ErrAuthFailed.WithArgs(err)
 	}
-	user := db.refUsername[username]
-	if user == nil {
-		return errors.ErrAuthFailed.WithArgs("user not found")
-	}
-	if err := user.VerifyPassword(r.Password); err != nil {
+
+	if err := user.VerifyPassword(r.User.Password); err != nil {
 		return errors.ErrAuthFailed.WithArgs(err)
 	}
 	m := make(map[string]interface{})
-	m["sub"] = username
+	m["sub"] = user.Username
 	if email := user.GetMailClaim(); email != "" {
 		m["mail"] = email
 	}
@@ -217,45 +212,40 @@ func (db *Database) AuthenticateUser(r *requests.Request) error {
 	return nil
 }
 
-// GetUser return User by either email address or username.
-func (db *Database) GetUser(s string) (*User, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
+// getUser return User by either email address or username.
+func (db *Database) getUser(s string) (*User, error) {
 	if strings.Contains(s, "@") {
-		return db.GetUserByEmailAddress(s)
+		return db.getUserByEmailAddress(s)
 	}
-	return db.GetUserByUsername(s)
+	return db.getUserByUsername(s)
 }
 
-// GetUserByID returns a user by id
-func (db *Database) GetUserByID(s string) (*User, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	userID := strings.ToLower(s)
-	if user, exists := db.refID[userID]; exists {
+// getUserByID returns a user by id
+func (db *Database) getUserByID(s string) (*User, error) {
+	s = strings.ToLower(s)
+	user, exists := db.refID[s]
+	if exists && user != nil {
 		return user, nil
 	}
 	return nil, errors.ErrDatabaseUserNotFound
 }
 
-// GetUserByUsername returns a user by username
-func (db *Database) GetUserByUsername(s string) (*User, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	username := strings.ToLower(s)
-	if user, exists := db.refUsername[username]; exists {
+// getUserByUsername returns a user by username
+func (db *Database) getUserByUsername(s string) (*User, error) {
+	s = strings.ToLower(s)
+	user, exists := db.refUsername[s]
+	if exists && user != nil {
 		return user, nil
 	}
 	return nil, errors.ErrDatabaseUserNotFound
 }
 
-// GetUserByEmailAddress returns a liast of users associated with a specific email
+// getUserByEmailAddress returns a liast of users associated with a specific email
 // address.
-func (db *Database) GetUserByEmailAddress(s string) (*User, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	email := strings.ToLower(s)
-	if user, exists := db.refEmailAddress[email]; exists {
+func (db *Database) getUserByEmailAddress(s string) (*User, error) {
+	s = strings.ToLower(s)
+	user, exists := db.refEmailAddress[s]
+	if exists && user != nil {
 		return user, nil
 	}
 	return nil, errors.ErrDatabaseUserNotFound
@@ -301,11 +291,11 @@ func (db *Database) commit() error {
 }
 
 func (db *Database) validateUserIdentity(username, email string) (*User, error) {
-	user1, err := db.GetUserByUsername(username)
+	user1, err := db.getUserByUsername(username)
 	if err != nil {
 		return nil, err
 	}
-	user2, err := db.GetUserByEmailAddress(email)
+	user2, err := db.getUserByEmailAddress(email)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +309,7 @@ func (db *Database) validateUserIdentity(username, email string) (*User, error) 
 func (db *Database) AddPublicKey(r *requests.Request) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	user, err := db.validateUserIdentity(r.Username, r.Email)
+	user, err := db.validateUserIdentity(r.User.Username, r.User.Email)
 	if err != nil {
 		return errors.ErrAddPublicKey.WithArgs(r.Key.Usage, err)
 	}
@@ -336,13 +326,16 @@ func (db *Database) AddPublicKey(r *requests.Request) error {
 func (db *Database) GetPublicKeys(r *requests.Request) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
-	user, err := db.validateUserIdentity(r.Username, r.Email)
+	user, err := db.validateUserIdentity(r.User.Username, r.User.Email)
 	if err != nil {
 		return errors.ErrGetPublicKeys.WithArgs(r.Key.Usage, err)
 	}
 	bundle := NewPublicKeyBundle()
 	for _, k := range user.PublicKeys {
 		if k.Usage != r.Key.Usage {
+			continue
+		}
+		if k.Disabled {
 			continue
 		}
 		bundle.Add(k)
@@ -355,7 +348,7 @@ func (db *Database) GetPublicKeys(r *requests.Request) error {
 func (db *Database) DeletePublicKey(r *requests.Request) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	user, err := db.validateUserIdentity(r.Username, r.Email)
+	user, err := db.validateUserIdentity(r.User.Username, r.User.Email)
 	if err != nil {
 		return errors.ErrDeletePublicKey.WithArgs(r.Key.ID, err)
 	}
@@ -372,7 +365,7 @@ func (db *Database) DeletePublicKey(r *requests.Request) error {
 func (db *Database) ChangeUserPassword(r *requests.Request) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	user, err := db.validateUserIdentity(r.Username, r.Email)
+	user, err := db.validateUserIdentity(r.User.Username, r.User.Email)
 	if err != nil {
 		return errors.ErrChangeUserPassword.WithArgs(err)
 	}
@@ -389,7 +382,7 @@ func (db *Database) ChangeUserPassword(r *requests.Request) error {
 func (db *Database) AddMfaToken(r *requests.Request) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	user, err := db.validateUserIdentity(r.Username, r.Email)
+	user, err := db.validateUserIdentity(r.User.Username, r.User.Email)
 	if err != nil {
 		return errors.ErrAddMfaToken.WithArgs(err)
 	}
@@ -406,7 +399,7 @@ func (db *Database) AddMfaToken(r *requests.Request) error {
 func (db *Database) GetMfaTokens(r *requests.Request) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
-	user, err := db.validateUserIdentity(r.Username, r.Email)
+	user, err := db.validateUserIdentity(r.User.Username, r.User.Email)
 	if err != nil {
 		return errors.ErrGetMfaTokens.WithArgs(err)
 	}
@@ -425,7 +418,7 @@ func (db *Database) GetMfaTokens(r *requests.Request) error {
 func (db *Database) DeleteMfaToken(r *requests.Request) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	user, err := db.validateUserIdentity(r.Username, r.Email)
+	user, err := db.validateUserIdentity(r.User.Username, r.User.Email)
 	if err != nil {
 		return errors.ErrDeleteMfaToken.WithArgs(r.MfaToken.ID, err)
 	}
