@@ -15,7 +15,7 @@
 package identity
 
 import (
-	"fmt"
+	"github.com/greenpau/go-identity/pkg/errors"
 	"strings"
 )
 
@@ -27,8 +27,9 @@ type Role struct {
 
 // NewRole returns an instance of Role.
 func NewRole(s string) (*Role, error) {
+	s = strings.TrimSpace(s)
 	if s == "" {
-		return nil, fmt.Errorf("empty role")
+		return nil, errors.ErrRoleEmpty
 	}
 	parts := strings.Split(s, "/")
 	role := &Role{}
@@ -47,9 +48,4 @@ func (r *Role) String() string {
 		return r.Name
 	}
 	return r.Organization + "/" + r.Name
-}
-
-// GetRolesClaim returns roles field of a claim.
-func (r *Role) GetRolesClaim() string {
-	return ""
 }

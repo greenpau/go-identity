@@ -5,29 +5,45 @@ import (
 	"github.com/iancoleman/strcase"
 	"reflect"
 	"strings"
+	"unicode"
 )
 
-func GetTagCompliance(resource interface{}) ([]string, bool) {
-	result := true
-	output := []string{}
+// Options stores compliance check options.
+type Options struct {
+	Disabled           bool
+	DisableTagPresent  bool
+	DisableTagMismatch bool
+}
 
-	resourceInstance := reflect.TypeOf(resource).Elem()
-	//resourceType := fmt.Sprintf("%s", resourceInstance.Name())
-	resourceKind := fmt.Sprintf("%s", resourceInstance.Kind())
+// GetTagCompliance performs struct tag compliance checks.
+func GetTagCompliance(resource interface{}, opts *Options) ([]string, error) {
+	var output []string
+	if opts == nil {
+		opts = &Options{}
+	}
 
-	if resourceKind != "struct" {
-		output = append(output, fmt.Sprintf(
-			"FAIL: %s resource kind is unsupported",
-			resourceKind,
-		))
-		return output, false
+	if opts.Disabled {
+		return output, nil
+	}
+
+	rr := reflect.TypeOf(resource).Elem()
+	//resourceType := fmt.Sprintf("%s", rr.Name())
+	rk := fmt.Sprintf("%s", rr.Kind())
+
+	if rk != "struct" {
+		return nil, fmt.Errorf("resource kind %q is unsupported", rk)
 	}
 
 	suggestedStructChanges := []string{}
 
 	requiredTags := []string{"json", "xml", "yaml"}
-	for i := 0; i < resourceInstance.NumField(); i++ {
-		resourceField := resourceInstance.Field(i)
+	for i := 0; i < rr.NumField(); i++ {
+		resourceField := rr.Field(i)
+		if !unicode.IsUpper(rune(resourceField.Name[0])) {
+			// Skip internal fields.
+			continue
+		}
+
 		expTagValue := convertFieldToTag(resourceField.Name)
 		expTagValue = expTagValue + ",omitempty"
 		var lastTag bool
@@ -41,13 +57,12 @@ func GetTagCompliance(resource interface{}) ([]string, bool) {
 			if tagValue == "-" {
 				continue
 			}
-			if tagValue == "" {
-				result = false
+			if tagValue == "" && !opts.DisableTagPresent {
 				output = append(output, fmt.Sprintf(
-					"FAIL: %s tag not found in %s.%s (%v)",
+					"tag %q not found in %s.%s (%v)",
 					tagName,
 					//resourceType,
-					resourceInstance.Name(),
+					rr.Name(),
 					resourceField.Name,
 					resourceField.Type,
 				))
@@ -64,13 +79,12 @@ func GetTagCompliance(resource interface{}) ([]string, bool) {
 			//if strings.Contains(tagValue, ",omitempty") {
 			//	tagValue = strings.Replace(tagValue, ",omitempty", "", -1)
 			//}
-			if tagValue != expTagValue {
-				result = false
+			if (tagValue != expTagValue) && !opts.DisableTagMismatch {
 				output = append(output, fmt.Sprintf(
-					"FAIL: %s tag mismatch found in %s.%s (%v): %s (actual) vs. %s (expected)",
+					"tag %q mismatch found in %s.%s (%v): %s (actual) vs. %s (expected)",
 					tagName,
 					//resourceType,
-					resourceInstance.Name(),
+					rr.Name(),
 					resourceField.Name,
 					resourceField.Type,
 					tagValue,
@@ -84,13 +98,17 @@ func GetTagCompliance(resource interface{}) ([]string, bool) {
 
 	if len(suggestedStructChanges) > 0 {
 		output = append(output, fmt.Sprintf(
-			"FAIL: suggested struct changes to %s:\n%s",
-			resourceInstance.Name(),
+			"suggested struct changes to %s:\n%s",
+			rr.Name(),
 			strings.Join(suggestedStructChanges, "\n"),
 		))
 	}
 
-	return output, result
+	if len(output) > 0 {
+		return output, fmt.Errorf("struct %q is not compliant", rr.Name())
+	}
+
+	return output, nil
 }
 
 func convertFieldToTag(s string) string {

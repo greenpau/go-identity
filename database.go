@@ -16,12 +16,16 @@ package identity
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/greenpau/go-identity/internal/utils"
+	"github.com/greenpau/go-identity/pkg/errors"
+	"github.com/greenpau/go-identity/pkg/requests"
 	"github.com/greenpau/versioned"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -39,72 +43,134 @@ func init() {
 	app.Documentation = "https://github.com/greenpau/go-identity"
 	app.SetVersion(appVersion, "1.0.23")
 	app.SetGitBranch(gitBranch, "master")
-	app.SetGitCommit(gitCommit, "v1.0.22-2-gd5db03c")
+	app.SetGitCommit(gitCommit, "v1.0.23")
 	app.SetBuildUser(buildUser, "")
 	app.SetBuildDate(buildDate, "")
 }
 
 // Database is user identity database.
 type Database struct {
-	mu              *sync.RWMutex             `json:"-" xml:"-" yaml:"-"`
-	Info            *versioned.PackageManager `json:"-" xml:"-" yaml:"-"`
-	Revision        uint64                    `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
-	RefEmailAddress map[string]*User          `json:"-" xml:"-" yaml:"-"`
-	RefUsername     map[string]*User          `json:"-" xml:"-" yaml:"-"`
-	RefID           map[string]*User          `json:"-" xml:"-" yaml:"-"`
-	Users           []*User                   `json:"users,omitempty" xml:"users,omitempty" yaml:"users,omitempty"`
+	mu              *sync.RWMutex
+	Version         string    `json:"version,omitempty" xml:"version,omitempty" yaml:"version,omitempty"`
+	Revision        uint64    `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
+	LastModified    time.Time `json:"last_modified,omitempty" xml:"last_modified,omitempty" yaml:"last_modified,omitempty"`
+	Users           []*User   `json:"users,omitempty" xml:"users,omitempty" yaml:"users,omitempty"`
+	refEmailAddress map[string]*User
+	refUsername     map[string]*User
+	refID           map[string]*User
+	path            string
 }
 
 // NewDatabase return an instance of Database.
-func NewDatabase() *Database {
+func NewDatabase(fp string) (*Database, error) {
 	db := &Database{
 		mu:              &sync.RWMutex{},
-		Info:            app,
-		Revision:        1,
-		RefUsername:     make(map[string]*User),
-		RefID:           make(map[string]*User),
-		RefEmailAddress: make(map[string]*User),
-		Users:           []*User{},
+		path:            fp,
+		refUsername:     make(map[string]*User),
+		refID:           make(map[string]*User),
+		refEmailAddress: make(map[string]*User),
 	}
-	return db
+	fileInfo, err := os.Stat(fp)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, errors.ErrNewDatabase.WithArgs(fp, err)
+		}
+		if err := os.MkdirAll(filepath.Base(fp), 0700); err != nil {
+			return nil, errors.ErrNewDatabase.WithArgs(fp, err)
+		}
+		db.Version = app.Version
+		if err := db.commit(); err != nil {
+			return nil, errors.ErrNewDatabase.WithArgs(fp, err)
+		}
+	} else {
+		if fileInfo.IsDir() {
+			return nil, errors.ErrNewDatabase.WithArgs(fp, "path points to a directory")
+		}
+		b, err := utils.ReadFileBytes(fp)
+		if err != nil {
+			return nil, errors.ErrNewDatabase.WithArgs(fp, err)
+		}
+		if err := json.Unmarshal(b, db); err != nil {
+			return nil, errors.ErrNewDatabase.WithArgs(fp, err)
+		}
+	}
+
+	// db.mu = &sync.RWMutex{}
+	// db.path = fp
+	db.Version = app.Version
+
+	for _, user := range db.Users {
+		if err := user.Valid(); err != nil {
+			return nil, errors.ErrNewDatabaseInvalidUser.WithArgs(user, err)
+		}
+		username := strings.ToLower(user.Username)
+		if _, exists := db.refUsername[username]; exists {
+			return nil, errors.ErrNewDatabaseDuplicateUser.WithArgs(user.Username, user)
+		}
+		if _, exists := db.refID[user.ID]; exists {
+			return nil, errors.ErrNewDatabaseDuplicateUserID.WithArgs(user.ID, user)
+		}
+		db.refUsername[username] = user
+		db.refID[user.ID] = user
+		for _, email := range user.EmailAddresses {
+			emailAddress := strings.ToLower(email.Address)
+			if _, exists := db.refEmailAddress[emailAddress]; exists {
+				return nil, errors.ErrNewDatabaseDuplicateEmail.WithArgs(emailAddress, user)
+			}
+			db.refEmailAddress[emailAddress] = user
+		}
+		for _, p := range user.Passwords {
+			if p.Algorithm == "" {
+				p.Algorithm = "bcrypt"
+			}
+		}
+	}
+	return db, nil
+}
+
+// GetPath returns the path  to Database.
+func (db *Database) GetPath() string {
+	return db.path
 }
 
 // AddUser adds user identity to the database.
 func (db *Database) AddUser(user *User) error {
-	if err := user.Valid(); err != nil {
-		return fmt.Errorf("invalid user, %s", err)
-	}
 	db.mu.Lock()
 	defer db.mu.Unlock()
+	if err := user.Valid(); err != nil {
+		return err
+	}
 	for i := 0; i < 10; i++ {
 		id := NewID()
-		if _, exists := db.RefID[id]; !exists {
+		if _, exists := db.refID[id]; !exists {
 			user.ID = id
 			break
 		}
 	}
 	username := strings.ToLower(user.Username)
-	if _, exists := db.RefUsername[username]; exists {
-		return fmt.Errorf("username already exists")
+	if _, exists := db.refUsername[username]; exists {
+		return errors.ErrAddUser.WithArgs(username, "username already in use")
 	}
 
 	emailAddresses := []string{}
-	if len(user.EmailAddresses) > 0 {
-		for _, email := range user.EmailAddresses {
-			emailAddress := strings.ToLower(email.Address)
-			if _, exists := db.RefEmailAddress[emailAddress]; exists {
-				return fmt.Errorf("email address already associated with another user")
-			}
-			emailAddresses = append(emailAddresses, emailAddress)
+	for _, email := range user.EmailAddresses {
+		emailAddress := strings.ToLower(email.Address)
+		if _, exists := db.refEmailAddress[emailAddress]; exists {
+			return errors.ErrAddUser.WithArgs(emailAddress, "email address already in use")
 		}
+		emailAddresses = append(emailAddresses, emailAddress)
 	}
 
-	db.RefUsername[username] = user
-	db.RefID[user.ID] = user
+	db.refUsername[username] = user
+	db.refID[user.ID] = user
 	for _, emailAddress := range emailAddresses {
-		db.RefEmailAddress[emailAddress] = user
+		db.refEmailAddress[emailAddress] = user
 	}
 	db.Users = append(db.Users, user)
+
+	if err := db.commit(); err != nil {
+		return errors.ErrAddUser.WithArgs(username, err)
+	}
 	return nil
 }
 
@@ -118,58 +184,47 @@ func (db *Database) AuthenticateDummyUser(password string) {
 }
 
 // AuthenticateUser adds user identity to the database.
-func (db *Database) AuthenticateUser(username, password string, opts map[string]interface{}) (map[string]interface{}, bool, error) {
+func (db *Database) AuthenticateUser(r *requests.Request) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
-	username = strings.ToLower(username)
-	if _, exists := db.RefUsername[username]; !exists {
-		return nil, false, fmt.Errorf("username does not exist")
+	username := strings.ToLower(r.Username)
+	if _, exists := db.refUsername[username]; !exists {
+		return errors.ErrAuthFailed.WithArgs("user not found")
 	}
-	user := db.RefUsername[username]
+	user := db.refUsername[username]
 	if user == nil {
-		return nil, false, fmt.Errorf("user associated with the username is nil")
+		return errors.ErrAuthFailed.WithArgs("user not found")
 	}
-	if err := user.VerifyPassword(password); err != nil {
-		return nil, false, fmt.Errorf("invalid password")
+	if err := user.VerifyPassword(r.Password); err != nil {
+		return errors.ErrAuthFailed.WithArgs(err)
 	}
-	userMap := make(map[string]interface{})
-	userMap["sub"] = username
+	m := make(map[string]interface{})
+	m["sub"] = username
 	if email := user.GetMailClaim(); email != "" {
-		userMap["mail"] = email
+		m["mail"] = email
 	}
 	if name := user.GetNameClaim(); name != "" {
-		userMap["name"] = name
+		m["name"] = name
 	}
 	if roles := user.GetRolesClaim(); roles != "" {
-		userMap["roles"] = roles
+		m["roles"] = roles
 	}
-	if opts == nil {
-		return userMap, true, nil
+
+	if r.Flags.Enabled {
+		user.GetFlags(r)
 	}
-	if len(opts) == 0 {
-		return userMap, true, nil
+	r.Response = m
+	return nil
+}
+
+// GetUser return User by either email address or username.
+func (db *Database) GetUser(s string) (*User, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if strings.Contains(s, "@") {
+		return db.GetUserByEmailAddress(s)
 	}
-	for k, v := range opts {
-		switch k {
-		case "require_mfa":
-			switch v.(type) {
-			case bool:
-				if v.(bool) {
-					userData := user.GetMfaConfigurationMetadata()
-					if _, exists := userMap["metadata"]; !exists {
-						userMap["metadata"] = userData
-					} else {
-						metadata := userMap["metadata"].(map[string]interface{})
-						for nk, nv := range userData {
-							metadata[nk] = nv
-						}
-						userMap["metadata"] = metadata
-					}
-				}
-			}
-		}
-	}
-	return userMap, true, nil
+	return db.GetUserByUsername(s)
 }
 
 // GetUserByID returns a user by id
@@ -177,10 +232,10 @@ func (db *Database) GetUserByID(s string) (*User, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	userID := strings.ToLower(s)
-	if user, exists := db.RefID[userID]; exists {
+	if user, exists := db.refID[userID]; exists {
 		return user, nil
 	}
-	return nil, fmt.Errorf("not found")
+	return nil, errors.ErrDatabaseUserNotFound
 }
 
 // GetUserByUsername returns a user by username
@@ -188,10 +243,10 @@ func (db *Database) GetUserByUsername(s string) (*User, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	username := strings.ToLower(s)
-	if user, exists := db.RefUsername[username]; exists {
+	if user, exists := db.refUsername[username]; exists {
 		return user, nil
 	}
-	return nil, fmt.Errorf("not found")
+	return nil, errors.ErrDatabaseUserNotFound
 }
 
 // GetUserByEmailAddress returns a liast of users associated with a specific email
@@ -200,78 +255,48 @@ func (db *Database) GetUserByEmailAddress(s string) (*User, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 	email := strings.ToLower(s)
-	if user, exists := db.RefEmailAddress[email]; exists {
+	if user, exists := db.refEmailAddress[email]; exists {
 		return user, nil
 	}
-	return nil, fmt.Errorf("not found")
+	return nil, errors.ErrDatabaseUserNotFound
 }
 
 // GetUserCount returns user count.
 func (db *Database) GetUserCount() int {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 	return len(db.Users)
 }
 
-// SaveToFile saves database contents to JSON file.
-func (db *Database) SaveToFile(fp string) error {
+// Save saves the database.
+func (db *Database) Save() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	data, err := json.MarshalIndent(db, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := ioutil.WriteFile(fp, []byte(data), 0600); err != nil {
-		return fmt.Errorf("failed to write data to %s, error: %s", fp, err)
-	}
-	return nil
+	return db.commit()
 }
 
-// LoadFromFile loads database contents from JSON file.
-func (db *Database) LoadFromFile(fp string) error {
+// Copy copies the database to another file.
+func (db *Database) Copy(fp string) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+	path := db.path
+	db.path = fp
+	err := db.commit()
+	db.path = path
+	return err
+}
 
-	content, err := utils.ReadFileBytes(fp)
+// commit writes the database contents to a file.
+func (db *Database) commit() error {
+	db.Revision++
+	db.LastModified = time.Now()
+	data, err := json.MarshalIndent(db, "", "  ")
 	if err != nil {
-		return err
+		return errors.ErrDatabaseCommit.WithArgs(db.path, err)
 	}
-
-	tdb := NewDatabase()
-	err = json.Unmarshal(content, tdb)
-	if err != nil {
-		return err
+	if err := ioutil.WriteFile(db.path, []byte(data), 0600); err != nil {
+		return errors.ErrDatabaseCommit.WithArgs(db.path, err)
 	}
-
-	if len(tdb.Users) > 0 {
-		for _, user := range tdb.Users {
-			if err := user.Valid(); err != nil {
-				return fmt.Errorf("invalid user %v, %s", user, err)
-			}
-			username := strings.ToLower(user.Username)
-			if _, exists := tdb.RefUsername[username]; exists {
-				return fmt.Errorf("duplicate username %s %v", user.Username, user)
-			}
-			if _, exists := tdb.RefID[user.ID]; exists {
-				return fmt.Errorf("duplicate user id: %s %v", user.ID, user)
-			}
-			tdb.RefUsername[username] = user
-			tdb.RefID[user.ID] = user
-			if len(user.EmailAddresses) > 0 {
-				for _, email := range user.EmailAddresses {
-					emailAddress := strings.ToLower(email.Address)
-					if _, exists := tdb.RefEmailAddress[emailAddress]; exists {
-						return fmt.Errorf("duplicate email address: %s %v", emailAddress, user)
-					}
-					tdb.RefEmailAddress[emailAddress] = user
-				}
-			}
-		}
-	}
-
-	db.Revision = tdb.Revision
-	db.RefUsername = tdb.RefUsername
-	db.RefID = tdb.RefID
-	db.RefEmailAddress = tdb.RefEmailAddress
-	db.Users = tdb.Users
 	return nil
 }
 
@@ -285,256 +310,130 @@ func (db *Database) validateUserIdentity(username, email string) (*User, error) 
 		return nil, err
 	}
 	if user1.ID != user2.ID {
-		return nil, fmt.Errorf("username and email point to a different identity")
+		return nil, errors.ErrDatabaseInvalidUser
 	}
 	return user1, nil
 }
 
 // AddPublicKey adds public key, e.g. GPG or SSH, for a user.
-func (db *Database) AddPublicKey(opts map[string]interface{}) error {
-	var username, email, payload, keyUsage, comment, fp string
-	for _, k := range []string{"username", "email", "key", "key_usage", "file_path"} {
-		if _, exists := opts[k]; !exists {
-			return fmt.Errorf("Required input field %s does not exist", k)
-		}
-		switch k {
-		case "username":
-			username = opts[k].(string)
-		case "email":
-			email = opts[k].(string)
-		case "key":
-			payload = opts[k].(string)
-		case "file_path":
-			fp = opts[k].(string)
-		case "key_usage":
-			keyUsage = opts[k].(string)
-		}
-	}
-	if v, exists := opts["comment"]; exists {
-		comment = v.(string)
-	}
-
-	user, err := db.validateUserIdentity(username, email)
+func (db *Database) AddPublicKey(r *requests.Request) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	user, err := db.validateUserIdentity(r.Username, r.Email)
 	if err != nil {
+		return errors.ErrAddPublicKey.WithArgs(r.Key.Usage, err)
+	}
+	if err := user.AddPublicKey(r); err != nil {
 		return err
 	}
-
-	if err := user.AddPublicKey(keyUsage, payload, comment); err != nil {
-		return fmt.Errorf("failed adding public %s key, %s", keyUsage, err)
-	}
-	if err := db.SaveToFile(fp); err != nil {
-		return fmt.Errorf("failed to commit newly added public %s key, %s", keyUsage, err)
+	if err := db.commit(); err != nil {
+		return errors.ErrAddPublicKey.WithArgs(r.Key.Usage, err)
 	}
 	return nil
 }
 
 // GetPublicKeys returns a list of public keys associated with a user.
-func (db *Database) GetPublicKeys(opts map[string]interface{}) ([]*PublicKey, error) {
-	var username, email, keyUsage string
-	for _, k := range []string{"username", "email", "key_usage"} {
-		if _, exists := opts[k]; !exists {
-			return nil, fmt.Errorf("Required input field %s does not exist", k)
-		}
-		switch k {
-		case "username":
-			username = opts[k].(string)
-		case "email":
-			email = opts[k].(string)
-		case "key_usage":
-			keyUsage = opts[k].(string)
-		}
-	}
-
-	user, err := db.validateUserIdentity(username, email)
+func (db *Database) GetPublicKeys(r *requests.Request) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	user, err := db.validateUserIdentity(r.Username, r.Email)
 	if err != nil {
-		return nil, err
+		return errors.ErrGetPublicKeys.WithArgs(r.Key.Usage, err)
 	}
-
-	keys := []*PublicKey{}
+	bundle := NewPublicKeyBundle()
 	for _, k := range user.PublicKeys {
-		if k.Usage != keyUsage {
+		if k.Usage != r.Key.Usage {
 			continue
 		}
-		keys = append(keys, k)
+		bundle.Add(k)
 	}
-	return keys, nil
+	r.Response = bundle
+	return nil
 }
 
 // DeletePublicKey deletes a public key associated with a user by key id.
-func (db *Database) DeletePublicKey(opts map[string]interface{}) error {
-	var username, email, keyID, fp string
-	for _, k := range []string{"username", "email", "key_id", "file_path"} {
-		if _, exists := opts[k]; !exists {
-			return fmt.Errorf("Required input field %s does not exist", k)
-		}
-		switch k {
-		case "username":
-			username = opts[k].(string)
-		case "email":
-			email = opts[k].(string)
-		case "key_id":
-			keyID = opts[k].(string)
-		case "file_path":
-			fp = opts[k].(string)
-		}
-	}
-
-	user, err := db.validateUserIdentity(username, email)
+func (db *Database) DeletePublicKey(r *requests.Request) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	user, err := db.validateUserIdentity(r.Username, r.Email)
 	if err != nil {
+		return errors.ErrDeletePublicKey.WithArgs(r.Key.ID, err)
+	}
+	if err := user.DeletePublicKey(r); err != nil {
 		return err
 	}
-
-	if err := user.DeletePublicKey(keyID); err != nil {
-		return err
-	}
-
-	if err := db.SaveToFile(fp); err != nil {
-		return fmt.Errorf("failed to commit removal of public key, %s", err)
+	if err := db.commit(); err != nil {
+		return errors.ErrDeletePublicKey.WithArgs(r.Key.Usage, err)
 	}
 	return nil
 }
 
-// ChangeUserPassword  change user password.
-func (db *Database) ChangeUserPassword(opts map[string]interface{}) error {
-	var username, email, currentPassword, newPassword, fp string
-	for _, k := range []string{"username", "email", "current_password", "new_password", "file_path"} {
-		if _, exists := opts[k]; !exists {
-			return fmt.Errorf("Required input field %s does not exist", k)
-		}
-		switch k {
-		case "username":
-			username = opts[k].(string)
-		case "email":
-			email = opts[k].(string)
-		case "current_password":
-			currentPassword = opts[k].(string)
-		case "new_password":
-			newPassword = opts[k].(string)
-		case "file_path":
-			fp = opts[k].(string)
-		}
-	}
-
-	user, err := db.validateUserIdentity(username, email)
+// ChangeUserPassword change user password.
+func (db *Database) ChangeUserPassword(r *requests.Request) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	user, err := db.validateUserIdentity(r.Username, r.Email)
 	if err != nil {
+		return errors.ErrChangeUserPassword.WithArgs(err)
+	}
+	if err := user.ChangePassword(r); err != nil {
 		return err
 	}
-
-	if err := user.VerifyPassword(currentPassword); err != nil {
-		return fmt.Errorf("current password is not valid, %s", err)
+	if err := db.commit(); err != nil {
+		return errors.ErrChangeUserPassword.WithArgs(err)
 	}
-
-	if err := user.AddPassword(newPassword); err != nil {
-		return fmt.Errorf("failed setting new password, %s", err)
-	}
-
-	if err := db.SaveToFile(fp); err != nil {
-		return fmt.Errorf("failed to commit new password, %s", err)
-	}
-
 	return nil
 }
 
 // AddMfaToken adds MFA token for a user.
-func (db *Database) AddMfaToken(opts map[string]interface{}) error {
-	var username, email, fp string
-	for _, k := range []string{"username", "email", "file_path"} {
-		if _, exists := opts[k]; !exists {
-			return fmt.Errorf("Required input field %s does not exist", k)
-		}
-		switch k {
-		case "username":
-			username = opts[k].(string)
-		case "email":
-			email = opts[k].(string)
-		case "file_path":
-			fp = opts[k].(string)
-		}
-	}
-
-	user, err := db.validateUserIdentity(username, email)
+func (db *Database) AddMfaToken(r *requests.Request) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	user, err := db.validateUserIdentity(r.Username, r.Email)
 	if err != nil {
+		return errors.ErrAddMfaToken.WithArgs(err)
+	}
+	if err := user.AddMfaToken(r); err != nil {
 		return err
 	}
-
-	tokenOpts := make(map[string]interface{})
-	for k, v := range opts {
-		switch k {
-		case "username", "email", "file_path":
-		default:
-			tokenOpts[k] = v
-		}
-	}
-
-	if err := user.AddMfaToken(tokenOpts); err != nil {
-		return fmt.Errorf("failed adding MFA token: %s", err)
-	}
-	if err := db.SaveToFile(fp); err != nil {
-		return fmt.Errorf("failed to commit newly added MFA token: %s", err)
+	if err := db.commit(); err != nil {
+		return errors.ErrAddMfaToken.WithArgs(err)
 	}
 	return nil
 }
 
 // GetMfaTokens returns a list of MFA tokens associated with a user.
-func (db *Database) GetMfaTokens(opts map[string]interface{}) ([]*MfaToken, error) {
-	var username, email string
-	for _, k := range []string{"username", "email"} {
-		if _, exists := opts[k]; !exists {
-			return nil, fmt.Errorf("Required input field %s does not exist", k)
-		}
-		switch k {
-		case "username":
-			username = opts[k].(string)
-		case "email":
-			email = opts[k].(string)
-		}
-	}
-
-	user, err := db.validateUserIdentity(username, email)
+func (db *Database) GetMfaTokens(r *requests.Request) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	user, err := db.validateUserIdentity(r.Username, r.Email)
 	if err != nil {
-		return nil, err
+		return errors.ErrGetMfaTokens.WithArgs(err)
 	}
-
-	tokens := []*MfaToken{}
+	bundle := NewMfaTokenBundle()
 	for _, token := range user.MfaTokens {
 		if token.Disabled {
 			continue
 		}
-		tokens = append(tokens, token)
+		bundle.Add(token)
 	}
-	return user.MfaTokens, nil
+	r.Response = bundle
+	return nil
 }
 
 // DeleteMfaToken deletes MFA token associated with a user by token id.
-func (db *Database) DeleteMfaToken(opts map[string]interface{}) error {
-	var username, email, tokenID, fp string
-	for _, k := range []string{"username", "email", "token_id", "file_path"} {
-		if _, exists := opts[k]; !exists {
-			return fmt.Errorf("Required input field %s does not exist", k)
-		}
-		switch k {
-		case "username":
-			username = opts[k].(string)
-		case "email":
-			email = opts[k].(string)
-		case "token_id":
-			tokenID = opts[k].(string)
-		case "file_path":
-			fp = opts[k].(string)
-		}
-	}
-
-	user, err := db.validateUserIdentity(username, email)
+func (db *Database) DeleteMfaToken(r *requests.Request) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	user, err := db.validateUserIdentity(r.Username, r.Email)
 	if err != nil {
+		return errors.ErrDeleteMfaToken.WithArgs(r.MfaToken.ID, err)
+	}
+	if err := user.DeleteMfaToken(r); err != nil {
 		return err
 	}
-
-	if err := user.DeleteMfaToken(tokenID); err != nil {
-		return err
-	}
-
-	if err := db.SaveToFile(fp); err != nil {
-		return fmt.Errorf("failed to commit removal of MFA token, %s", err)
+	if err := db.commit(); err != nil {
+		return errors.ErrDeleteMfaToken.WithArgs(r.MfaToken.ID, err)
 	}
 	return nil
 }

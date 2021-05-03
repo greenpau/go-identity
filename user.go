@@ -15,7 +15,8 @@
 package identity
 
 import (
-	"fmt"
+	"github.com/greenpau/go-identity/pkg/errors"
+	"github.com/greenpau/go-identity/pkg/requests"
 	"strings"
 	"time"
 )
@@ -54,16 +55,31 @@ func NewUser(s string) *User {
 	return user
 }
 
+// NewUserWithRoles returns User with additional fields.
+func NewUserWithRoles(username, password, email, fullName string, roles []string) (*User, error) {
+	user := NewUser(username)
+	if err := user.AddPassword(password); err != nil {
+		return nil, err
+	}
+	if err := user.AddEmailAddress(email); err != nil {
+		return nil, err
+	}
+	if err := user.AddRoles(roles); err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
 // Valid returns true if a user conforms to a standard.
 func (user *User) Valid() error {
 	if len(user.ID) != 36 {
-		return fmt.Errorf("invalid user id length: %d", len(user.ID))
+		return errors.ErrUserIDInvalidLength.WithArgs(len(user.ID))
 	}
 	if user.Username == "" {
-		return fmt.Errorf("username is empty")
+		return errors.ErrUsernameEmpty
 	}
 	if len(user.Passwords) < 1 {
-		return fmt.Errorf("user password not found")
+		return errors.ErrUserPasswordNotFound
 	}
 	return nil
 }
@@ -148,6 +164,16 @@ func (user *User) HasRole(s string) bool {
 	return false
 }
 
+// AddRoles adds roles to a user identity.
+func (user *User) AddRoles(roles []string) error {
+	for _, role := range roles {
+		if err := user.AddRole(role); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // AddRole adds a role to a user identity.
 func (user *User) AddRole(s string) error {
 	role, err := NewRole(s)
@@ -170,7 +196,7 @@ func (user *User) AddRole(s string) error {
 // VerifyPassword verifies provided password matches to the one in the database.
 func (user *User) VerifyPassword(s string) error {
 	if len(user.Passwords) == 0 {
-		return fmt.Errorf("user has no passwords")
+		return errors.ErrUserPasswordNotFound
 	}
 	for _, p := range user.Passwords {
 		if p.Disabled || p.Expired {
@@ -180,7 +206,7 @@ func (user *User) VerifyPassword(s string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("no match found")
+	return errors.ErrUserPasswordInvalid
 }
 
 // GetMailClaim returns primary email address.
@@ -244,62 +270,54 @@ func (user *User) AddName(name *Name) error {
 }
 
 // AddPublicKey adds public key, e.g. GPG or SSH, to a user identity.
-func (user *User) AddPublicKey(keyUsage, payload, comment string) error {
-	pubkeyOpts := make(map[string]interface{})
-	pubkeyOpts["usage"] = keyUsage
-	pubkeyOpts["payload"] = payload
-	if comment != "" {
-		pubkeyOpts["comment"] = comment
-	}
-	pubkey, err := NewPublicKey(pubkeyOpts)
+func (user *User) AddPublicKey(r *requests.Request) error {
+	key, err := NewPublicKey(r)
 	if err != nil {
-		return fmt.Errorf("Failed adding a public key: %s", err)
+		return err
 	}
-
 	for _, k := range user.PublicKeys {
-		if k.Type != pubkey.Type {
+		if k.Type != key.Type {
 			continue
 		}
-		if k.Fingerprint != pubkey.Fingerprint {
+		if k.Fingerprint != key.Fingerprint {
 			continue
 		}
-		return fmt.Errorf("Failed adding a public key: already exists")
+		return errors.ErrAddPublicKey.WithArgs(r.Key.Usage, "already exists")
 	}
-	user.PublicKeys = append(user.PublicKeys, pubkey)
+	user.PublicKeys = append(user.PublicKeys, key)
 	return nil
 }
 
 // DeletePublicKey deletes a public key associated with a user.
-func (user *User) DeletePublicKey(keyID string) error {
+func (user *User) DeletePublicKey(r *requests.Request) error {
 	var found bool
 	keys := []*PublicKey{}
 	for _, k := range user.PublicKeys {
-		if k.ID == keyID {
+		if k.ID == r.Key.ID {
 			found = true
 			continue
 		}
 		keys = append(keys, k)
 	}
 	if !found {
-		return fmt.Errorf("key id not found")
+		return errors.ErrDeletePublicKey.WithArgs(r.Key.ID, "not found")
 	}
 	user.PublicKeys = keys
 	return nil
 }
 
 // AddMfaToken adds MFA token to a user identity.
-func (user *User) AddMfaToken(opts map[string]interface{}) error {
-	token, err := NewMfaToken(opts)
+func (user *User) AddMfaToken(r *requests.Request) error {
+	token, err := NewMfaToken(r)
 	if err != nil {
-		return fmt.Errorf("Failed adding MFA token: %s", err)
+		return err
 	}
-
 	for _, k := range user.MfaTokens {
 		if k.Secret == token.Secret {
-			return fmt.Errorf("Failed adding MFA token: duplicate secret found")
+			return errors.ErrDuplicateMfaTokenSecret
 		}
 		if k.Comment == token.Comment {
-			return fmt.Errorf("Failed adding MFA token: duplicate comment found")
+			return errors.ErrDuplicateMfaTokenComment
 		}
 	}
 	user.MfaTokens = append(user.MfaTokens, token)
@@ -307,41 +325,48 @@ func (user *User) AddMfaToken(opts map[string]interface{}) error {
 }
 
 // DeleteMfaToken deletes MFA token associated with a user.
-func (user *User) DeleteMfaToken(tokenID string) error {
+func (user *User) DeleteMfaToken(r *requests.Request) error {
 	var found bool
 	tokens := []*MfaToken{}
 	for _, k := range user.MfaTokens {
-		if k.ID == tokenID {
+		if k.ID == r.MfaToken.ID {
 			found = true
 			continue
 		}
 		tokens = append(tokens, k)
 	}
 	if !found {
-		return fmt.Errorf("token id not found")
+		return errors.ErrDeleteMfaToken.WithArgs(r.MfaToken.ID, "not found")
 	}
 	user.MfaTokens = tokens
 	return nil
 }
 
-// GetMfaConfigurationMetadata returns MFA configuration metadata
-func (user *User) GetMfaConfigurationMetadata() map[string]interface{} {
-	conf := map[string]interface{}{
-		"mfa_configured":     false,
-		"mfa_app_configured": false,
-		"mfa_u2f_configured": false,
-	}
-	for _, token := range user.MfaTokens {
-		if token.Disabled {
-			continue
-		}
-		conf["mfa_configured"] = true
-		switch token.Type {
-		case "totp":
-			conf["mfa_app_configured"] = true
-		case "u2f":
-			conf["mfa_u2f_configured"] = true
+// GetFlags populates request context with metadata about a user.
+func (user *User) GetFlags(r *requests.Request) {
+	if r.Flags.MfaRequired {
+		for _, token := range user.MfaTokens {
+			if token.Disabled {
+				continue
+			}
+			r.Flags.MfaConfigured = true
+			switch token.Type {
+			case "totp":
+				r.Flags.MfaApp = true
+			case "u2f":
+				r.Flags.MfaUniversal = true
+			}
 		}
 	}
-	return conf
+}
+
+// ChangePassword changes user password.
+func (user *User) ChangePassword(r *requests.Request) error {
+	if err := user.VerifyPassword(r.OldPassword); err != nil {
+		return errors.ErrChangeUserPassword.WithArgs(err)
+	}
+	if err := user.AddPassword(r.Password); err != nil {
+		return errors.ErrChangeUserPassword.WithArgs(err)
+	}
+	return nil
 }

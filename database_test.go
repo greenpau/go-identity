@@ -15,25 +15,191 @@
 package identity
 
 import (
-	"github.com/greenpau/go-identity/internal/utils"
+	"fmt"
+	"path/filepath"
+	// "github.com/greenpau/go-identity/pkg/requests"
+	"github.com/greenpau/go-identity/internal/tests"
+	"github.com/greenpau/go-identity/pkg/errors"
 	"testing"
 )
 
-func TestNewDatabase(t *testing.T) {
-	var testFailed int
-	dbPath := "assets/tests/userdb.json"
-	db := NewDatabase()
-	complianceMessages, compliant := utils.GetTagCompliance(db)
-	if !compliant {
-		testFailed++
+func createTestDatabase(s string) (*Database, error) {
+	tmpDir, err := tests.TempDir(s)
+	if err != nil {
+		return nil, err
 	}
-	for _, entry := range complianceMessages {
-		t.Logf("%s", entry)
+	pwd1 := NewRandomString(12)
+	user1, err := NewUserWithRoles(
+		"jsmith", pwd1, "jsmith@gmail.com", "Smith, John",
+		[]string{"viewer", "editor", "admin"},
+	)
+	if err != nil {
+		return nil, err
 	}
-	if testFailed > 0 {
-		t.Fatalf("encountered %d errors", testFailed)
+	pwd2 := NewRandomString(16)
+	user2, err := NewUserWithRoles(
+		"greenp", pwd2, "greenp@gmail.com", "Green, Peter",
+		[]string{"viewer"},
+	)
+	if err != nil {
+		return nil, err
 	}
+	db, err := NewDatabase(filepath.Join(tmpDir, "user_db.json"))
+	if err != nil {
+		return nil, err
+	}
+	for _, u := range []*User{user1, user2} {
+		if err := db.AddUser(u); err != nil {
+			return nil, err
+		}
+	}
+	return db, nil
+}
 
+func TestNewDatabase(t *testing.T) {
+	tmpDir, err := tests.TempDir("TestNewDatabase")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Logf("%v", tmpDir)
+	passwd := NewRandomString(12)
+	testcases := []struct {
+		name      string
+		path      string
+		username  string
+		password  string
+		fullName  string
+		email     string
+		roles     []string
+		backup    string
+		want      map[string]interface{}
+		shouldErr bool
+		err       error
+	}{
+		{
+			name:     "test create new database",
+			path:     filepath.Join(tmpDir, "user_db.json"),
+			username: "jsmith",
+			password: passwd,
+			fullName: "Smith, John",
+			email:    "jsmith@gmail.com",
+			roles:    []string{"viewer", "editor", "admin"},
+			backup:   filepath.Join(tmpDir, "user_db_backup.json"),
+			want: map[string]interface{}{
+				"path":       filepath.Join(tmpDir, "user_db.json"),
+				"user_count": 0,
+			},
+		},
+		{
+			name: "test new database is directory",
+			path: tmpDir,
+			want: map[string]interface{}{
+				"path": tmpDir,
+			},
+			shouldErr: true,
+			err:       errors.ErrNewDatabase.WithArgs(tmpDir, "path points to a directory"),
+		},
+		{
+			name: "test load new database",
+			path: filepath.Join(tmpDir, "user_db.json"),
+			want: map[string]interface{}{
+				"path":       filepath.Join(tmpDir, "user_db.json"),
+				"user_count": 1,
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			var user *User
+			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
+			msgs = append(msgs, fmt.Sprintf("temporary directory: %s", tmpDir))
+			if tc.username != "" {
+				user, err = NewUserWithRoles(tc.username, tc.password, tc.email, tc.fullName, tc.roles)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			db, err := NewDatabase(tc.path)
+			if tests.EvalErrWithLog(t, err, "new database", tc.shouldErr, tc.err, msgs) {
+				return
+			}
+			got := make(map[string]interface{})
+			got["path"] = db.GetPath()
+			got["user_count"] = len(db.Users)
+			tests.EvalObjectsWithLog(t, "eval", tc.want, got, msgs)
+			if tc.username != "" {
+				if err := db.AddUser(user); err != nil {
+					tests.EvalErrWithLog(t, err, "add user", tc.shouldErr, tc.err, msgs)
+				}
+			}
+			if err := db.Save(); err != nil {
+				t.Fatal(err)
+			}
+			if tc.backup != "" {
+				if err := db.Copy(tc.backup); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func TestDatabaseAuthentication(t *testing.T) {
+	db, err := createTestDatabase("TestDatabaseAuthentication")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Logf("%v", db.path)
+
+	testcases := []struct {
+		name      string
+		want      map[string]interface{}
+		shouldErr bool
+		err       error
+	}{
+		{
+			name: "authenticate valid user",
+			want: map[string]interface{}{
+				"user_count": 0,
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
+			msgs = append(msgs, fmt.Sprintf("database path: %s", db.path))
+			/*
+				if tests.EvalErrWithLog(t, err, "new database", tc.shouldErr, tc.err, msgs) {
+					return
+				}
+				got := make(map[string]interface{})
+				got["path"] = db.GetPath()
+				got["user_count"] = len(db.Users)
+				tests.EvalObjectsWithLog(t, "eval", tc.want, got, msgs)
+				if tc.username != "" {
+					if err := db.AddUser(user); err != nil {
+						tests.EvalErrWithLog(t, err, "add user", tc.shouldErr, tc.err, msgs)
+					}
+				}
+				if err := db.Save(); err != nil {
+					t.Fatal(err)
+				}
+				if tc.backup != "" {
+					if err := db.Copy(tc.backup); err != nil {
+						t.Fatal(err)
+					}
+				}
+			*/
+		})
+	}
+}
+
+/*
+	var req *requests.Request
+	db, err := NewDatabase("assets/tests/userdb.json")
+	if err != nil {
+		t.Fatal(err)
+	}
 	user := NewUser("jsmith")
 	email := "jsmith@gmail.com"
 	//password := "jsmith123"
@@ -79,18 +245,11 @@ func TestNewDatabase(t *testing.T) {
 		t.Fatalf("failed adding user %v to user database: %s", user, err)
 	}
 
-	if err := db.SaveToFile(dbPath); err != nil {
-		t.Fatalf("error saving database at %s: %s", dbPath, err)
+	req = &requests.Request{Username: user.Username, Password: password}
+	if err := db.AuthenticateUser(req); err != nil {
+		t.Fatalf("error authenticating user %s: %v", user.Username, err)
 	}
-
-	claims, authed, err := db.AuthenticateUser(user.Username, password, nil)
-	if err != nil || !authed {
-		t.Fatalf(
-			"error authenticating user %s, claims: %v, authenticated: %v, error: %s",
-			user.Username, claims, authed, err,
-		)
-	}
-	t.Logf("User claims: %v", claims)
+	t.Logf("Response: %v", req.Response)
 
 	prevPassword := password
 	for i := 0; i < 15; i++ {
@@ -98,27 +257,29 @@ func TestNewDatabase(t *testing.T) {
 			prevPassword = newPassword
 		}
 		newPassword = NewRandomString(16)
-		reqOpts := make(map[string]interface{})
-		reqOpts["username"] = user.Username
-		reqOpts["email"] = email
-		reqOpts["current_password"] = prevPassword
-		reqOpts["new_password"] = newPassword
-		reqOpts["file_path"] = dbPath
-		if err := db.ChangeUserPassword(reqOpts); err != nil {
-			t.Fatalf("error changing user password: %s, request options: %v", err, reqOpts)
+		req = &requests.Request{
+			Username:    user.Username,
+			Email:       email,
+			OldPassword: prevPassword,
+			Password:    newPassword,
 		}
-		t.Logf("User password has changed")
+		if err := db.ChangeUserPassword(req); err != nil {
+			t.Fatalf("error changing user %q password: %v", user.Username, err)
+		}
+		t.Logf("User %q password has changed", user.Username)
 	}
 
-	if _, authed, _ := db.AuthenticateUser(user.Username, prevPassword, nil); authed {
+	req = &requests.Request{Username: user.Username, Password: prevPassword}
+	if err := db.AuthenticateUser(req); err == nil {
 		t.Fatalf("expected authentication failure, but got success")
 	}
 
-	claims, authed, err = db.AuthenticateUser(user.Username, newPassword, nil)
-	if !authed {
+	req = &requests.Request{Username: user.Username, Password: newPassword}
+	if err := db.AuthenticateUser(req); err != nil {
 		t.Fatalf("expected authentication success, but got failure: %s", err)
 	}
-	t.Logf("User claims: %v", claims)
+
+	t.Logf("User claims: %v", req.Response)
 
 	dbUser, err := db.GetUserByUsername(user.Username)
 	if err != nil {
@@ -129,40 +290,4 @@ func TestNewDatabase(t *testing.T) {
 		t.Fatalf("expected password count of %d, received %d", expectedPasswordCount, len(dbUser.Passwords))
 	}
 }
-
-func TestLoadDatabase(t *testing.T) {
-	expectedUserCount := 1
-	dbPath := "assets/tests/userdb.json"
-	dbCopyPath := "assets/tests/userdb_copy.json"
-	db := NewDatabase()
-	if err := db.LoadFromFile(dbPath); err != nil {
-		t.Fatalf("failed loading database at %s: %s", dbPath, err)
-	}
-
-	actualUserCount := db.GetUserCount()
-	if expectedUserCount != actualUserCount {
-		t.Fatalf(
-			"unexpected database user count at %s: %d (expected) vs. %d (actual)",
-			dbPath, expectedUserCount, actualUserCount,
-		)
-	}
-
-	if err := db.SaveToFile(dbCopyPath); err != nil {
-		t.Fatalf("error saving database at %s: %s", dbCopyPath, err)
-	}
-
-	if err := db.LoadFromFile(dbPath); err != nil {
-		t.Fatalf("failed loading database at %s: %s", dbPath, err)
-	}
-	if err := db.SaveToFile(dbCopyPath); err != nil {
-		t.Fatalf("error saving database at %s: %s", dbCopyPath, err)
-	}
-
-	actualUserCount = db.GetUserCount()
-	if expectedUserCount != actualUserCount {
-		t.Fatalf(
-			"unexpected database user count at %s: %d (expected) vs. %d (actual)",
-			dbPath, expectedUserCount, actualUserCount,
-		)
-	}
-}
+*/

@@ -17,7 +17,7 @@ all: test coverage
 
 linter:
 	@echo "Running lint checks"
-	@golint *.go
+	@golint -set_exit_status ./...
 	@echo "PASS: golint"
 
 test: covdir linter
@@ -25,7 +25,7 @@ test: covdir linter
 
 ctest: covdir linter
 	@richgo version || go get -u github.com/kyoh86/richgo
-	@time richgo test $(VERBOSE) $(TEST) -coverprofile=.coverage/coverage.out ./*.go
+	@time richgo test $(VERBOSE) $(TEST) -coverprofile=.coverage/coverage.out ./...
 
 covdir:
 	@echo "Creating .coverage/ directory"
@@ -52,8 +52,19 @@ qtest:
 	@#go test -v -run TestVersioned *.go
 	@#go test -v -run TestNewID *.go
 	@#time richgo test -v -run TestNewPublicKey *.go
-	@time richgo test -v -run TestNewMfaToken *.go
 	@#time richgo test -v -run TestNewUser *.go
+	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewPublicKey *.go
+	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewMfaToken *.go
+	@#time richgo test -v -coverprofile=.coverage/coverage.out internal/tag/*.go
+	@time richgo test -v -coverprofile=.coverage/coverage.out -run "Test.*Database.*" *.go
+	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewEmailAddress *.go
+	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewRole *.go
+	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewPassword *.go
+	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewName *.go
+	@go tool cover -html=.coverage/coverage.out -o .coverage/coverage.html
+	@#go tool cover -func=.coverage/coverage.out | grep -v "100.0"
+	@go tool cover -func=.coverage/coverage.out | grep database
+
 
 dep:
 	@echo "Making dependencies check ..."
@@ -63,7 +74,7 @@ dep:
 	@go get -u github.com/kyoh86/richgo
 
 license:
-	@addlicense -c "Paul Greenberg greenpau@outlook.com" -y 2020 ./*.go
+	@addlicense -c "Paul Greenberg greenpau@outlook.com" -y 2020 ./*.go ./pkg/**/*.go
 
 release:
 	@echo "Making release"

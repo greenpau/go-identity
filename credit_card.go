@@ -15,7 +15,7 @@
 package identity
 
 import (
-	"fmt"
+	"github.com/greenpau/go-identity/pkg/errors"
 	"strings"
 	"time"
 )
@@ -50,7 +50,7 @@ func (cc *CreditCard) AddIssuer(s string) error {
 			}
 		}
 	}
-	return fmt.Errorf("unsupported credit card issuer: %s", s)
+	return errors.ErrCreditCardUnsupportedIssuer.WithArgs(s)
 }
 
 // AddAssociation adds the name of the association, e.g. Visa, American
@@ -62,5 +62,5 @@ func (cc *CreditCard) AddAssociation(s string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("unsupported credit card association: %s", s)
+	return errors.ErrCreditCardUnsupportedAssociation.WithArgs(s)
 }

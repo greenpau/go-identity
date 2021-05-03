@@ -26,10 +26,17 @@ import (
 	"fmt"
 	"hash"
 	"math"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/greenpau/go-identity/pkg/errors"
+	"github.com/greenpau/go-identity/pkg/requests"
 )
+
+// MfaTokenBundle is a collection of public keys.
+type MfaTokenBundle struct {
+	tokens []*MfaToken
+}
 
 // MfaToken is a puiblic key in a public-private key pair.
 type MfaToken struct {
@@ -56,130 +63,95 @@ type MfaDevice struct {
 	Type   string `json:"type,omitempty" xml:"type,omitempty" yaml:"type,omitempty"`
 }
 
-// NewMfaToken returns an instance of MfaToken.
-func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
-	if opts == nil {
-		return nil, fmt.Errorf("no arguments found")
+// NewMfaTokenBundle returns an instance of MfaTokenBundle.
+func NewMfaTokenBundle() *MfaTokenBundle {
+	return &MfaTokenBundle{
+		tokens: []*MfaToken{},
 	}
+}
 
+// Add adds MfaToken to MfaTokenBundle.
+func (b *MfaTokenBundle) Add(k *MfaToken) {
+	b.tokens = append(b.tokens, k)
+}
+
+// Get returns MfaToken instances of the MfaTokenBundle.
+func (b *MfaTokenBundle) Get() []*MfaToken {
+	return b.tokens
+}
+
+// NewMfaToken returns an instance of MfaToken.
+func NewMfaToken(req *requests.Request) (*MfaToken, error) {
 	p := &MfaToken{
 		ID:         GetRandomString(40),
 		CreatedAt:  time.Now().UTC(),
 		Parameters: make(map[string]string),
-	}
-
-	if v, exists := opts["comment"]; exists {
-		p.Comment = v.(string)
-	}
-
-	// Type
-	if v, exists := opts["type"]; exists {
-		p.Type = v.(string)
+		Comment:    req.MfaToken.Comment,
+		Type:       req.MfaToken.Type,
 	}
 
 	switch p.Type {
-	case "":
-		return nil, fmt.Errorf("empty mfa token type")
 	case "totp":
 		// Shared Secret
-		for _, k := range []string{"secret"} {
-			if _, exists := opts[k]; !exists {
-				return nil, fmt.Errorf("argument %s not found", k)
-			}
-		}
-		p.Secret = opts["secret"].(string)
-
+		p.Secret = req.MfaToken.Secret
 		// Algorithm
-		if v, exists := opts["algo"]; exists {
-			p.Algorithm = v.(string)
-		}
-		p.Algorithm = strings.ToLower(p.Algorithm)
+		p.Algorithm = strings.ToLower(req.MfaToken.Algorithm)
 		switch p.Algorithm {
+		case "sha1", "sha256", "sha512":
 		case "":
 			p.Algorithm = "sha1"
-		case "sha1", "sha256", "sha512":
 		default:
-			return nil, fmt.Errorf("invalid mfa token algorithm: %s", p.Algorithm)
+			return nil, errors.ErrMfaTokenInvalidAlgorithm.WithArgs(p.Algorithm)
 		}
+		req.MfaToken.Algorithm = p.Algorithm
 
 		// Period
-		if v, exists := opts["period"]; exists {
-			period := v.(string)
-			periodInt, err := strconv.Atoi(period)
-			if err != nil {
-				return nil, err
-			}
-			if period != strconv.Itoa(periodInt) {
-				return nil, fmt.Errorf("invalid mfa token period value")
-			}
-
-			p.Period = periodInt
-		}
+		p.Period = req.MfaToken.Period
 		if p.Period < 30 || p.Period > 300 {
-			return nil, fmt.Errorf("invalid mfa token period value, must be between 30 to 300 seconds, got %d", p.Period)
+			return nil, errors.ErrMfaTokenInvalidPeriod.WithArgs(p.Period)
 		}
-
 		// Digits
-		if v, exists := opts["digits"]; exists {
-			digits, err := strconv.Atoi(v.(string))
-			if err != nil {
-				return nil, err
-			}
-			p.Digits = digits
-		} else {
+		p.Digits = req.MfaToken.Digits
+		if p.Digits == 0 {
 			p.Digits = 6
 		}
 		if p.Digits < 4 || p.Digits > 8 {
-			return nil, fmt.Errorf("mfa digits must be between 4 and 8 digits long")
+			return nil, errors.ErrMfaTokenInvalidDigits.WithArgs(p.Digits)
 		}
-
 		// Codes
-		v, exists := opts["passcode"]
-		if !exists {
-			return nil, fmt.Errorf("mfa passcode not found")
-		}
-		code := v.(string)
-		if code == "" {
-			return nil, fmt.Errorf("MFA passcode is empty")
-		}
-		if len(code) < 4 || len(code) > 8 {
-			return nil, fmt.Errorf("MFA passcode is not 4-8 characters")
-		}
-		if err := p.ValidateCodeWithTime(code, time.Now().Add(-time.Second*time.Duration(p.Period)).UTC()); err != nil {
-			return nil, fmt.Errorf("MFA passcode %s is invalid", code)
+		if err := p.ValidateCodeWithTime(req.MfaToken.Passcode, time.Now().Add(-time.Second*time.Duration(p.Period)).UTC()); err != nil {
+			return nil, err
 		}
 	case "u2f":
-		var webauthnChallenge string
 		r := &WebAuthnRegisterRequest{}
-		if v, exists := opts["webauthn_register"]; exists {
-			encs := v.(string)
-			s, err := base64.StdEncoding.DecodeString(encs)
-			if err != nil {
-				return nil, fmt.Errorf("invalid u2f request, malformed base64 webauthn register: %s", err)
-			}
-			if err := json.Unmarshal([]byte(s), r); err != nil {
-				return nil, fmt.Errorf("invalid u2f request, malformed json webauthn register: %s", err)
-			}
-		} else {
-			return nil, fmt.Errorf("invalid u2f request, webauthn register not found")
+		if req.WebAuthn.Register == "" {
+			return nil, errors.ErrWebAuthnRegisterNotFound
 		}
-		if v, exists := opts["webauthn_challenge"]; exists {
-			webauthnChallenge = v.(string)
-			p.Secret = webauthnChallenge
-		} else {
-			return nil, fmt.Errorf("invalid u2f request, webauthn challenge not found")
+		if req.WebAuthn.Challenge == "" {
+			return nil, errors.ErrWebAuthnChallengeNotFound
 		}
 
+		// Decode WebAuthn Register.
+		decoded, err := base64.StdEncoding.DecodeString(req.WebAuthn.Register)
+		if err != nil {
+			return nil, errors.ErrWebAuthnParse.WithArgs(err)
+		}
+		if err := json.Unmarshal([]byte(decoded), r); err != nil {
+			return nil, errors.ErrWebAuthnParse.WithArgs(err)
+		}
+		// Set WebAuthn Challenge as Secret.
+		p.Secret = req.WebAuthn.Challenge
+
 		if r.ID == "" {
-			return nil, fmt.Errorf("invalid u2f request, webauthn register id is empty")
+			return nil, errors.ErrWebAuthnEmptyRegisterID
 		}
 
 		switch r.Type {
 		case "public-key":
 		case "":
-			return nil, fmt.Errorf("invalid u2f request, webauthn register key type is empty")
+			return nil, errors.ErrWebAuthnEmptyRegisterKeyType
 		default:
-			return nil, fmt.Errorf("invalid u2f request, webauthn register key type is invalid")
+			return nil, errors.ErrWebAuthnInvalidRegisterKeyType.WithArgs(r.Type)
 		}
 
 		for _, tr := range r.Transports {
@@ -189,23 +161,23 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 			case "ble":
 			case "internal":
 			case "":
-				return nil, fmt.Errorf("invalid u2f request, webauthn register key transport is empty")
+				return nil, errors.ErrWebAuthnEmptyRegisterTransport
 			default:
-				return nil, fmt.Errorf("invalid u2f request, webauthn register key transport is invalid")
+				return nil, errors.ErrWebAuthnInvalidRegisterTransport.WithArgs(tr)
 			}
 		}
 
 		if r.AttestationObject == nil {
-			return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object is nil")
+			return nil, errors.ErrWebAuthnRegisterAttestationObjectNotFound
 		}
 		if r.AttestationObject.AuthData == nil {
-			return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object auth data is nil")
+			return nil, errors.ErrWebAuthnRegisterAuthDataNotFound
 		}
 		if r.AttestationObject.AuthData.CredentialData == nil {
-			return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object auth data credential is nil")
+			return nil, errors.ErrWebAuthnRegisterCredentialDataNotFound
 		}
 		if r.AttestationObject.AuthData.CredentialData.PublicKey == nil {
-			return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object auth data credential pubkey is nil")
+			return nil, errors.ErrWebAuthnRegisterPublicKeyNotFound
 		}
 
 		// See https://www.iana.org/assignments/cose/cose.xhtml#key-type
@@ -215,10 +187,10 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 			case 2:
 				keyType = "ec2"
 			default:
-				return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object auth data credential pubkey key_type %v unsupported", v)
+				return nil, errors.ErrWebAuthnRegisterPublicKeyUnsupported.WithArgs(v)
 			}
 		} else {
-			return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object auth data credential pubkey key_type not found")
+			return nil, errors.ErrWebAuthnRegisterPublicKeyTypeNotFound
 		}
 
 		// See https://www.iana.org/assignments/cose/cose.xhtml#algorithms
@@ -228,10 +200,10 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 			case -7:
 				keyAlgo = "es256"
 			default:
-				return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object auth data credential pubkey algorithm %v unsupported", v)
+				return nil, errors.ErrWebAuthnRegisterPublicKeyAlgorithmUnsupported.WithArgs(v)
 			}
 		} else {
-			return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object auth data credential pubkey algorithm not found")
+			return nil, errors.ErrWebAuthnRegisterPublicKeyAlgorithmNotFound
 		}
 
 		// See https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves
@@ -241,7 +213,7 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 			case 1:
 				curveType = "p256"
 			default:
-				return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object auth data credential pubkey curve_type %v unsupported", v)
+				return nil, errors.ErrWebAuthnRegisterPublicKeyCurveUnsupported.WithArgs(v)
 			}
 		}
 		if v, exists := r.AttestationObject.AuthData.CredentialData.PublicKey["curve_x"]; exists {
@@ -256,10 +228,8 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 			switch keyAlgo {
 			case "es256":
 			default:
-				return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object auth data credential pubkey algorithm %s unsupported", keyAlgo)
+				return nil, errors.ErrWebAuthnRegisterPublicKeyTypeAlgorithmUnsupported.WithArgs(keyType, keyAlgo)
 			}
-		default:
-			return nil, fmt.Errorf("invalid u2f request, webauthn register attestation object auth data credential pubkey key_type %s unsupported", keyType)
 		}
 
 		p.Parameters["u2f_id"] = r.ID
@@ -272,8 +242,10 @@ func NewMfaToken(opts map[string]interface{}) (*MfaToken, error) {
 		p.Parameters["curve_ycoord"] = curveYcoord
 		//return nil, fmt.Errorf("XXX: %v", r.AttestationObject.AttestationStatement.Certificates)
 		//return nil, fmt.Errorf("XXX: %v", r.AttestationObject.AuthData.CredentialData)
+	case "":
+		return nil, errors.ErrMfaTokenTypeEmpty
 	default:
-		return nil, fmt.Errorf("invalid mfa token type: %s", p.Type)
+		return nil, errors.ErrMfaTokenInvalidType.WithArgs(p.Type)
 	}
 
 	return p, nil
@@ -296,8 +268,14 @@ func (p *MfaToken) ValidateCode(code string) error {
 // ValidateCodeWithTime validates a passcode at a particular time.
 func (p *MfaToken) ValidateCodeWithTime(code string, ts time.Time) error {
 	code = strings.TrimSpace(code)
+	if code == "" {
+		return errors.ErrMfaTokenInvalidPasscode.WithArgs("empty")
+	}
+	if len(code) < 4 || len(code) > 8 {
+		return errors.ErrMfaTokenInvalidPasscode.WithArgs("not 4-8 characters long")
+	}
 	if len(code) != p.Digits {
-		return fmt.Errorf("passcode length is invalid")
+		return errors.ErrMfaTokenInvalidPasscode.WithArgs("digits length mismatch")
 	}
 	tp := uint64(math.Floor(float64(ts.Unix()) / float64(p.Period)))
 	tps := []uint64{}
@@ -313,7 +291,7 @@ func (p *MfaToken) ValidateCodeWithTime(code string, ts time.Time) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("passcode is invalid")
+	return errors.ErrMfaTokenInvalidPasscode.WithArgs("failed")
 }
 
 func generateMfaCode(secret, algo string, digits int, ts uint64) (string, error) {
@@ -326,8 +304,10 @@ func generateMfaCode(secret, algo string, digits int, ts uint64) (string, error)
 		mac = hmac.New(sha256.New, secretBytes)
 	case "sha512":
 		mac = hmac.New(sha512.New, secretBytes)
+	case "":
+		return "", errors.ErrMfaTokenEmptyAlgorithm
 	default:
-		return "", fmt.Errorf("unsupported algorithm: %s", algo)
+		return "", errors.ErrMfaTokenInvalidAlgorithm.WithArgs(algo)
 	}
 
 	buf := make([]byte, 8)

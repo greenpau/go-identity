@@ -21,6 +21,8 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"github.com/greenpau/go-identity/pkg/errors"
+	"github.com/greenpau/go-identity/pkg/requests"
 	"golang.org/x/crypto/ssh"
 	"strings"
 	"time"
@@ -29,6 +31,11 @@ import (
 var supportedPublicKeyTypes = map[string]bool{
 	"ssh": true,
 	"gpg": true,
+}
+
+// PublicKeyBundle is a collection of public keys.
+type PublicKeyBundle struct {
+	keys []*PublicKey
 }
 
 // PublicKey is a puiblic key in a public-private key pair.
@@ -49,27 +56,34 @@ type PublicKey struct {
 	DisabledAt     time.Time `json:"disabled_at,omitempty" xml:"disabled_at,omitempty" yaml:"disabled_at,omitempty"`
 }
 
+// NewPublicKeyBundle returns an instance of PublicKeyBundle.
+func NewPublicKeyBundle() *PublicKeyBundle {
+	return &PublicKeyBundle{
+		keys: []*PublicKey{},
+	}
+}
+
+// Add adds PublicKey to PublicKeyBundle.
+func (b *PublicKeyBundle) Add(k *PublicKey) {
+	b.keys = append(b.keys, k)
+}
+
+// Get returns PublicKey instances of the PublicKeyBundle.
+func (b *PublicKeyBundle) Get() []*PublicKey {
+	return b.keys
+}
+
 // NewPublicKey returns an instance of PublicKey.
-func NewPublicKey(opts map[string]interface{}) (*PublicKey, error) {
-	if opts == nil {
-		return nil, fmt.Errorf("no arguments found")
-	}
-	for _, k := range []string{"payload", "usage"} {
-		if _, exists := opts[k]; !exists {
-			return nil, fmt.Errorf("argument %s not found", k)
-		}
-	}
+func NewPublicKey(r *requests.Request) (*PublicKey, error) {
 	p := &PublicKey{
+		Comment:   r.Key.Comment,
 		ID:        GetRandomString(40),
-		Payload:   opts["payload"].(string),
-		Usage:     opts["usage"].(string),
+		Payload:   r.Key.Payload,
+		Usage:     r.Key.Usage,
 		CreatedAt: time.Now().UTC(),
 	}
 	if err := p.parse(); err != nil {
 		return nil, err
-	}
-	if v, exists := opts["comment"]; exists {
-		p.Comment = v.(string)
 	}
 	return p, nil
 }
@@ -83,24 +97,32 @@ func (p *PublicKey) Disable() {
 }
 
 func (p *PublicKey) parse() error {
-	switch p.Usage {
-	case "ssh", "gpg":
-	default:
-		return fmt.Errorf("unsupported usage: %s", p.Usage)
+	if _, exists := supportedPublicKeyTypes[p.Usage]; !exists {
+		return errors.ErrPublicKeyInvalidUsage.WithArgs(p.Usage)
 	}
+
+	if p.Payload == "" {
+		return errors.ErrPublicKeyEmptyPayload
+	}
+
 	payloadBytes := bytes.TrimSpace([]byte(p.Payload))
-	if strings.Contains(p.Payload, "RSA PUBLIC KEY") {
+
+	switch {
+	case strings.Contains(p.Payload, "RSA PUBLIC KEY"):
 		// Processing PEM file format
 		if p.Usage != "ssh" {
-			return fmt.Errorf("usage is ssh while payload is not")
+			return errors.ErrPublicKeyUsagePayloadMismatch.WithArgs(p.Usage)
 		}
 		block, _ := pem.Decode(bytes.TrimSpace([]byte(p.Payload)))
+		if block == nil {
+			return errors.ErrPublicKeyBlockType.WithArgs("")
+		}
 		if block.Type != "RSA PUBLIC KEY" {
-			return fmt.Errorf("failed decoding RSA PUBLIC KEY: block type mismatch: %s", block.Type)
+			return errors.ErrPublicKeyBlockType.WithArgs(block.Type)
 		}
 		publicKeyInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
 		if err != nil {
-			return fmt.Errorf("failed x509.ParsePKIXPublicKey: %s", err)
+			return errors.ErrPublicKeyParse.WithArgs(err)
 		}
 		publicKey, err := ssh.NewPublicKey(publicKeyInterface)
 		if err != nil {
@@ -113,13 +135,13 @@ func (p *PublicKey) parse() error {
 		p.OpenSSH = string(ssh.MarshalAuthorizedKey(publicKey))
 		p.OpenSSH = strings.TrimLeft(p.OpenSSH, p.Type+" ")
 		return nil
-	}
-	if strings.Contains(p.Payload, "PGP PUBLIC KEY") {
+	case strings.HasPrefix(p.Payload, "ssh-rsa "):
+	default:
 		// Processing PEM file format
-		if p.Usage != "pgp" {
-			return fmt.Errorf("usage is pgp while payload is not ")
-		}
-		return fmt.Errorf("PGP PUBLIC KEY is unsupported")
+		// if p.Usage != "gpg" {
+		//	return errors.ErrPublicKeyUsagePayloadMismatch.WithArgs(p.Usage)
+		//}
+		return errors.ErrPublicKeyUsageUnsupported.WithArgs(p.Usage)
 	}
 
 	// Attempt parsing as authorized OpenSSH keys
@@ -143,11 +165,11 @@ func (p *PublicKey) parse() error {
 	k := make([]byte, base64.StdEncoding.DecodedLen(len(payloadBase64)))
 	n, err := base64.StdEncoding.Decode(k, payloadBase64)
 	if err != nil {
-		return fmt.Errorf("failed decoding: %s", err)
+		return errors.ErrPublicKeyParse.WithArgs(err)
 	}
 	publicKey, err := ssh.ParsePublicKey(k[:n])
 	if err != nil {
-		return fmt.Errorf("failed parsing public key")
+		return errors.ErrPublicKeyParse.WithArgs(err)
 	}
 	p.Type = publicKey.Type()
 	p.Comment = string(comment)
@@ -160,14 +182,14 @@ func (p *PublicKey) parse() error {
 		publicKeyBytes := publicKey.Marshal()
 		parsedPublicKey, err := ssh.ParsePublicKey(publicKeyBytes)
 		if err != nil {
-			return fmt.Errorf("failed parsing OpenSSH key: %s", err)
+			return errors.ErrPublicKeyParse.WithArgs(err)
 		}
 		cryptoKey := parsedPublicKey.(ssh.CryptoPublicKey)
 		publicCryptoKey := cryptoKey.CryptoPublicKey()
 		rsaKey := publicCryptoKey.(*rsa.PublicKey)
 		rsaKeyASN1, err := x509.MarshalPKIXPublicKey(rsaKey)
 		if err != nil {
-			return fmt.Errorf("failed converting a public key to PKIX, ASN.1 DER form: %s", err)
+			return errors.ErrPublicKeyParse.WithArgs(err)
 		}
 		encodedKey := pem.EncodeToMemory(&pem.Block{
 			Type: "RSA PUBLIC KEY",
@@ -176,8 +198,7 @@ func (p *PublicKey) parse() error {
 		})
 		p.Payload = string(encodedKey)
 	default:
-		return fmt.Errorf("unsupported key type: %s", publicKey.Type())
+		return errors.ErrPublicKeyTypeUnsupported.WithArgs(publicKey.Type())
 	}
-
 	return nil
 }

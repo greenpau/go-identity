@@ -15,22 +15,17 @@
 package identity
 
 import (
-	"fmt"
+	"github.com/greenpau/go-identity/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
-	"strconv"
 	"strings"
 	"time"
 )
-
-var supportedPasswordTypes = map[string]bool{
-	"bcrypt": true,
-}
 
 // Password is a memorized secret, typically a string of characters,
 // used to confirm the identity of a user.
 type Password struct {
 	Purpose    string    `json:"purpose,omitempty" xml:"purpose,omitempty" yaml:"purpose,omitempty"`
-	Type       string    `json:"type,omitempty" xml:"type,omitempty" yaml:"type,omitempty"`
+	Algorithm  string    `json:"algorithm,omitempty" xml:"algorithm,omitempty" yaml:"algorithm,omitempty"`
 	Hash       string    `json:"hash,omitempty" xml:"hash,omitempty" yaml:"hash,omitempty"`
 	Cost       int       `json:"cost,omitempty" xml:"cost,omitempty" yaml:"cost,omitempty"`
 	Expired    bool      `json:"expired,omitempty" xml:"expired,omitempty" yaml:"expired,omitempty"`
@@ -42,11 +37,25 @@ type Password struct {
 
 // NewPassword returns an instance of Password.
 func NewPassword(s string) (*Password, error) {
+	return NewPasswordWithOptions(s, "generic", "bcrypt", nil)
+}
+
+// NewPasswordWithOptions returns an instance of Password based on the
+// provided parameters.
+func NewPasswordWithOptions(s, purpose, algo string, params map[string]interface{}) (*Password, error) {
 	p := &Password{
-		Purpose:   "generic",
+		Purpose:   purpose,
+		Algorithm: algo,
 		CreatedAt: time.Now().UTC(),
 	}
-	if err := p.hashPassword(s); err != nil {
+
+	if params != nil {
+		if v, exists := params["cost"]; exists {
+			p.Cost = v.(int)
+		}
+	}
+
+	if err := p.hash(s); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -60,42 +69,26 @@ func (p *Password) Disable() {
 	p.DisabledAt = time.Now().UTC()
 }
 
-// HashPassword hashes plain text password. The default hashing method
-// is bctypt with cost 10.
-func (p *Password) hashPassword(s string) error {
-	var password string
+func (p *Password) hash(s string) error {
+	s = strings.TrimSpace(s)
 	if s == "" {
-		return fmt.Errorf("password is empty")
+		return errors.ErrPasswordEmpty
 	}
-	parts := strings.Split(s, ":")
-	if len(parts) == 1 {
-		p.Type = "bcrypt"
-		password = s
-	}
-	if len(parts) > 1 {
-		p.Type = parts[0]
-		password = parts[1]
-	}
-
-	if p.Type == "bcrypt" {
-		if len(parts) > 2 {
-			cost, err := strconv.Atoi(parts[2])
-			if err != nil {
-				return fmt.Errorf("bcrypt error: failed parsing cost %s", parts[2])
-			}
-			p.Cost = cost
-		}
-		if p.Cost == 0 {
+	switch p.Algorithm {
+	case "bcrypt":
+		if p.Cost < 8 {
 			p.Cost = 10
 		}
-		ph, err := bcrypt.GenerateFromPassword([]byte(password), p.Cost)
+		ph, err := bcrypt.GenerateFromPassword([]byte(s), p.Cost)
 		if err != nil {
-			return fmt.Errorf("failed hashing password")
+			return errors.ErrPasswordGenerate.WithArgs(err)
 		}
 		p.Hash = string(ph)
 		return nil
+	case "":
+		return errors.ErrPasswordEmptyAlgorithm
 	}
-	return fmt.Errorf("failed to hash a password, no hashing method found")
+	return errors.ErrPasswordUnsupportedAlgorithm.WithArgs(p.Algorithm)
 }
 
 // Match returns true when the provided password matches the user.

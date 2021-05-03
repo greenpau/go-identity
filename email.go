@@ -15,7 +15,7 @@
 package identity
 
 import (
-	"fmt"
+	"github.com/greenpau/go-identity/pkg/errors"
 	"regexp"
 	"strings"
 )
@@ -41,7 +41,7 @@ type EmailAddress struct {
 // NewEmailAddress returns an instance of EmailAddress.
 func NewEmailAddress(s string) (*EmailAddress, error) {
 	if !emailRegex.MatchString(s) {
-		return nil, fmt.Errorf("invalid email address")
+		return nil, errors.ErrEmailAddressInvalid
 	}
 	parts := strings.Split(s, "@")
 	addr := &EmailAddress{

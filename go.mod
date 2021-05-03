@@ -3,6 +3,7 @@ module github.com/greenpau/go-identity
 go 1.15
 
 require (
+	github.com/google/go-cmp v0.5.5
 	github.com/greenpau/versioned v1.0.23
 	github.com/iancoleman/strcase v0.0.0-20191112232945-16388991a334
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect

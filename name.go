@@ -15,7 +15,8 @@
 package identity
 
 import (
-	"fmt"
+	"github.com/greenpau/go-identity/pkg/errors"
+	"strings"
 )
 
 // Name represents human name
@@ -38,16 +39,41 @@ func NewName() *Name {
 
 // GetNameClaim returns name field of a claim.
 func (n *Name) GetNameClaim() string {
-	if n.First != "" && n.Last != "" {
-		return fmt.Sprintf("%s, %s", n.Last, n.First)
-	}
-	return ""
+	return n.GetFullName()
 }
 
 // GetFullName returns the primary full name for User.
 func (n *Name) GetFullName() string {
-	if n.First != "" && n.Last != "" {
-		return fmt.Sprintf("%s, %s", n.Last, n.First)
+	var b strings.Builder
+	if n.Last != "" {
+		b.WriteString(n.Last)
 	}
-	return ""
+	if n.First != "" {
+		b.WriteString(", " + n.First)
+	}
+	return b.String()
+}
+
+// ParseName parses name from input.
+func ParseName(s string) (*Name, error) {
+	n := &Name{}
+	var x, y int
+	for i, sp := range []string{",", " "} {
+		x = 0
+		y = 1
+		if i == 1 {
+			x = 1
+			y = 0
+		}
+		if !strings.Contains(s, sp) {
+			continue
+		}
+		arr := strings.Split(s, sp)
+		if len(arr) == 2 {
+			n.Last = strings.TrimSpace(arr[x])
+			n.First = strings.TrimSpace(arr[y])
+			return n, nil
+		}
+	}
+	return nil, errors.ErrParseNameFailed.WithArgs(s)
 }

@@ -15,21 +15,48 @@
 package identity
 
 import (
-	"github.com/greenpau/go-identity/internal/utils"
+	"fmt"
 	"testing"
+
+	"github.com/greenpau/go-identity/internal/tests"
+	"github.com/greenpau/go-identity/pkg/errors"
 )
 
 func TestNewName(t *testing.T) {
-	var testFailed int
-	name := NewName()
-	complianceMessages, compliant := utils.GetTagCompliance(name)
-	if !compliant {
-		testFailed++
+	testcases := []struct {
+		name      string
+		fullName  string
+		want      map[string]interface{}
+		shouldErr bool
+		err       error
+	}{
+		{
+			name:     "test name",
+			fullName: "John Smith",
+			want: map[string]interface{}{
+				"claim":     "Smith, John",
+				"full_name": "Smith, John",
+			},
+		},
+		{
+			name:      "test parse name error",
+			fullName:  "foobar",
+			shouldErr: true,
+			err:       errors.ErrParseNameFailed.WithArgs("foobar"),
+		},
 	}
-	for _, entry := range complianceMessages {
-		t.Logf("%s", entry)
-	}
-	if testFailed > 0 {
-		t.Fatalf("encountered %d errors", testFailed)
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
+			NewName()
+			entry, err := ParseName(tc.fullName)
+			if tests.EvalErrWithLog(t, err, "parse name", tc.shouldErr, tc.err, msgs) {
+				return
+			}
+			got := make(map[string]interface{})
+			got["claim"] = entry.GetNameClaim()
+			got["full_name"] = entry.GetFullName()
+			tests.EvalObjectsWithLog(t, "eval", tc.want, got, msgs)
+		})
 	}
 }

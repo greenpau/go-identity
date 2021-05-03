@@ -15,24 +15,12 @@
 package identity
 
 import (
-	"github.com/greenpau/go-identity/internal/utils"
+	"github.com/greenpau/go-identity/pkg/requests"
 	"testing"
 )
 
 func TestNewUser(t *testing.T) {
-	var testFailed int
 	user := NewUser("jsmith")
-	complianceMessages, compliant := utils.GetTagCompliance(user)
-	if !compliant {
-		testFailed++
-	}
-	for _, entry := range complianceMessages {
-		t.Logf("%s", entry)
-	}
-	if testFailed > 0 {
-		t.Fatalf("encountered %d errors", testFailed)
-	}
-
 	if err := user.Valid(); err == nil {
 		t.Fatalf("user has no password, but was found to be valid")
 	}
@@ -58,17 +46,22 @@ func TestNewUser(t *testing.T) {
 		t.Fatalf("added %s role, but the user has no %s role", roleName, roleName)
 	}
 
-	keyUsage := "ssh"
-	keyPayload := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDnnPNq40sWtv6WsG4cICs3Cb0C9EIeKbccOTVFk4/Ptl5oEMWHaH/e5OYAfhPsr66jC3SxCynlViXvc5+r7r9Tj1M7WGSIomZQr7c2gwyPRwT+/UBEtPi63LIAubb9rkdnZEmxU3hxdnMzeBovFLuEMZpmL5sce+sZNMMBybGP9UCRZaJhyYxy0jEJI9hlg4jRK30vkzPzsO+DNIqdAv3PNkhUqJABeMiXnxCCSQcb5S65zJPkGCRXKOlloFNt3ps9auWpJQgprrcxXFlSCvxu2UcdjegrmOMhohrxMl/VyMpbDWcyHolvZSko8uzM/G0UoR9UMrJN/AyXdzDrciqBG9EUT9NGPoA5sqWT6lt0cS7tG7tbAfV5XoN7QikwsWkDyaPfqV9EbLOkxBZCE9RdQTVtfX9MX7rBYz2MTItZ9WLIMmsPWe4RS31JhYhSiJqgGq0K8mHors5dfgMtiVaLUXG7hUpLRZ2qn29SkI0xIRiYUqLP1pV65EbJhy+1+2Vm2AgvdQrWrSofj6Dsw8IiyDtKx7ahgKnUbV3d4rtuo1hCikXu8rTlfUEXgR7kSdxaSb5uzqDLlKSe27szZxUvwsyGbTgQfLukyQZB9Kvxq6J70XMRG7UikKvyR0m/Eetp4B8RX5gvNqpd+SOl+dm+cGuqWT7UROygyf28cCqLzQ== jsmith@outlook.com"
-	keyComment := "jsmith@outlook.com"
-	if err := user.AddPublicKey(keyUsage, keyPayload, keyComment); err != nil {
+	pkr := requests.NewRequest()
+
+	pkr.Key.Usage = "ssh"
+	pkr.Key.Payload = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDnnPNq40sWtv6WsG4cICs3Cb0C9EIeKbccOTVFk4/Ptl5oEMWHaH/e5OYAfhPsr66jC3SxCynlViXvc5+r7r9Tj1M7WGSIomZQr7c2gwyPRwT+/UBEtPi63LIAubb9rkdnZEmxU3hxdnMzeBovFLuEMZpmL5sce+sZNMMBybGP9UCRZaJhyYxy0jEJI9hlg4jRK30vkzPzsO+DNIqdAv3PNkhUqJABeMiXnxCCSQcb5S65zJPkGCRXKOlloFNt3ps9auWpJQgprrcxXFlSCvxu2UcdjegrmOMhohrxMl/VyMpbDWcyHolvZSko8uzM/G0UoR9UMrJN/AyXdzDrciqBG9EUT9NGPoA5sqWT6lt0cS7tG7tbAfV5XoN7QikwsWkDyaPfqV9EbLOkxBZCE9RdQTVtfX9MX7rBYz2MTItZ9WLIMmsPWe4RS31JhYhSiJqgGq0K8mHors5dfgMtiVaLUXG7hUpLRZ2qn29SkI0xIRiYUqLP1pV65EbJhy+1+2Vm2AgvdQrWrSofj6Dsw8IiyDtKx7ahgKnUbV3d4rtuo1hCikXu8rTlfUEXgR7kSdxaSb5uzqDLlKSe27szZxUvwsyGbTgQfLukyQZB9Kvxq6J70XMRG7UikKvyR0m/Eetp4B8RX5gvNqpd+SOl+dm+cGuqWT7UROygyf28cCqLzQ== jsmith@outlook.com"
+	pkr.Key.Comment = "jsmith@outlook.com"
+
+	if err := user.AddPublicKey(pkr); err != nil {
 		t.Fatalf("error adding ssh key: %s", err)
 	}
 
 	keyID := user.PublicKeys[0].ID
-	t.Logf("key id: %s", keyID)
+	// t.Logf("key id: %s", keyID)
 
-	if err := user.DeletePublicKey(keyID); err != nil {
+	pkr = requests.NewRequest()
+	pkr.Key.ID = keyID
+	if err := user.DeletePublicKey(pkr); err != nil {
 		t.Fatalf("error deleting ssh key: %s", err)
 	}
 
