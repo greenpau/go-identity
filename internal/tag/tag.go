@@ -13,6 +13,7 @@ type Options struct {
 	Disabled           bool
 	DisableTagPresent  bool
 	DisableTagMismatch bool
+	DisableTagOnEmpty  bool
 }
 
 // GetTagCompliance performs struct tag compliance checks.
@@ -45,7 +46,9 @@ func GetTagCompliance(resource interface{}, opts *Options) ([]string, error) {
 		}
 
 		expTagValue := convertFieldToTag(resourceField.Name)
-		expTagValue = expTagValue + ",omitempty"
+		if !opts.DisableTagOnEmpty {
+			expTagValue = expTagValue + ",omitempty"
+		}
 		var lastTag bool
 		for j, tagName := range requiredTags {
 			if len(requiredTags)-1 == j {

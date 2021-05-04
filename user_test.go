@@ -25,7 +25,7 @@ func TestNewUser(t *testing.T) {
 		t.Fatalf("user has no password, but was found to be valid")
 	}
 
-	if err := user.AddPassword("jsmith123"); err != nil {
+	if err := user.AddPassword("jsmith123", 0); err != nil {
 		t.Fatalf("error adding password: %s", err)
 	}
 

@@ -37,6 +37,9 @@ const (
 	ErrUserPasswordNotFound StandardError = "user password not set"
 	ErrUserPasswordInvalid  StandardError = "user password is invalid"
 
+	ErrUserPolicyCompliance     StandardError = "username policy compliance check failed"
+	ErrPasswordPolicyCompliance StandardError = "user password policy compliance check failed"
+
 	ErrAddUser StandardError = "failed adding user %q: %v"
 
 	ErrPasswordEmpty                StandardError = "empty password"

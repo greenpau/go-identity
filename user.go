@@ -58,7 +58,7 @@ func NewUser(s string) *User {
 // NewUserWithRoles returns User with additional fields.
 func NewUserWithRoles(username, password, email, fullName string, roles []string) (*User, error) {
 	user := NewUser(username)
-	if err := user.AddPassword(password); err != nil {
+	if err := user.AddPassword(password, 0); err != nil {
 		return nil, err
 	}
 	if err := user.AddEmailAddress(email); err != nil {
@@ -99,29 +99,28 @@ func (user *User) Valid() error {
 }
 
 // AddPassword returns creates and adds password for a user identity.
-func (user *User) AddPassword(s string) error {
+func (user *User) AddPassword(s string, keepVersions int) error {
+	var passwords []*Password
 	password, err := NewPassword(s)
 	if err != nil {
 		return err
 	}
-	if len(user.Passwords) == 0 {
-		user.Passwords = append(user.Passwords, password)
-		return nil
+	if keepVersions < 1 {
+		keepVersions = 9
 	}
-	var shrink bool
-	for i, p := range user.Passwords {
-		if !p.Disabled {
-			p.Disable()
+	passwords = append(passwords, password)
+	if len(user.Passwords) > 0 {
+		for i, p := range user.Passwords {
+			if !p.Disabled {
+				p.Disable()
+			}
+			passwords = append(passwords, p)
+			if i > keepVersions {
+				break
+			}
 		}
-		if i > 9 {
-			shrink = true
-		}
-
 	}
-	if shrink {
-		user.Passwords = user.Passwords[:8]
-	}
-	user.Passwords = append([]*Password{password}, user.Passwords...)
+	user.Passwords = passwords
 	return nil
 }
 
@@ -375,11 +374,11 @@ func (user *User) GetFlags(r *requests.Request) {
 }
 
 // ChangePassword changes user password.
-func (user *User) ChangePassword(r *requests.Request) error {
+func (user *User) ChangePassword(r *requests.Request, keepVersions int) error {
 	if err := user.VerifyPassword(r.User.OldPassword); err != nil {
 		return errors.ErrChangeUserPassword.WithArgs(err)
 	}
-	if err := user.AddPassword(r.User.Password); err != nil {
+	if err := user.AddPassword(r.User.Password, keepVersions); err != nil {
 		return errors.ErrChangeUserPassword.WithArgs(err)
 	}
 	return nil

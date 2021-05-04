@@ -87,7 +87,7 @@ func TestNewDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	// t.Logf("%v", tmpDir)
+	t.Logf("%v", tmpDir)
 	passwd := NewRandomString(12)
 	testcases := []struct {
 		name      string
@@ -364,7 +364,7 @@ func TestDatabaseAddUser(t *testing.T) {
 				},
 			},
 			shouldErr: true,
-			err:       errors.ErrAddUser.WithArgs("", errors.ErrPasswordEmpty),
+			err:       errors.ErrAddUser.WithArgs("", errors.ErrUserPolicyCompliance),
 		},
 		{
 			name: "add user with used email",

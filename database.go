@@ -29,12 +29,29 @@ import (
 )
 
 var (
-	app        *versioned.PackageManager
-	appVersion string
-	gitBranch  string
-	gitCommit  string
-	buildUser  string
-	buildDate  string
+	app           *versioned.PackageManager
+	appVersion    string
+	gitBranch     string
+	gitCommit     string
+	buildUser     string
+	buildDate     string
+	defaultPolicy = Policy{
+		User: UserPolicy{
+			MinLength: 3,
+			MaxLength: 50,
+		},
+		Password: PasswordPolicy{
+			KeepVersions:        10,
+			MinLength:           8,
+			MaxLength:           128,
+			RequireUppercase:    false,
+			RequireLowercase:    false,
+			RequireNumber:       false,
+			RequireNonAlpha:     false,
+			BlockReuse:          false,
+			BlockPasswordChange: false,
+		},
+	}
 )
 
 func init() {
@@ -48,10 +65,36 @@ func init() {
 	app.SetBuildDate(buildDate, "")
 }
 
+// Policy represents database usage policy.
+type Policy struct {
+	Password PasswordPolicy `json:"password,omitempty" xml:"password,omitempty" yaml:"password,omitempty"`
+	User     UserPolicy     `json:"user,omitempty" xml:"user,omitempty" yaml:"user,omitempty"`
+}
+
+// PasswordPolicy represents database password policy.
+type PasswordPolicy struct {
+	KeepVersions        int  `json:"keep_versions" xml:"keep_versions" yaml:"keep_versions"`
+	MinLength           int  `json:"min_length" xml:"min_length" yaml:"min_length"`
+	MaxLength           int  `json:"max_length" xml:"max_length" yaml:"max_length"`
+	RequireUppercase    bool `json:"require_uppercase" xml:"require_uppercase" yaml:"require_uppercase"`
+	RequireLowercase    bool `json:"require_lowercase" xml:"require_lowercase" yaml:"require_lowercase"`
+	RequireNumber       bool `json:"require_number" xml:"require_number" yaml:"require_number"`
+	RequireNonAlpha     bool `json:"require_non_alpha" xml:"require_non_alpha" yaml:"require_non_alpha"`
+	BlockReuse          bool `json:"block_reuse" xml:"block_reuse" yaml:"block_reuse"`
+	BlockPasswordChange bool `json:"block_password_change" xml:"block_password_change" yaml:"block_password_change"`
+}
+
+// UserPolicy represents database username policy
+type UserPolicy struct {
+	MinLength int `json:"min_length" xml:"min_length" yaml:"min_length"`
+	MaxLength int `json:"max_length" xml:"max_length" yaml:"max_length"`
+}
+
 // Database is user identity database.
 type Database struct {
 	mu              *sync.RWMutex
 	Version         string    `json:"version,omitempty" xml:"version,omitempty" yaml:"version,omitempty"`
+	Policy          Policy    `json:"policy,omitempty" xml:"policy,omitempty" yaml:"policy,omitempty"`
 	Revision        uint64    `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
 	LastModified    time.Time `json:"last_modified,omitempty" xml:"last_modified,omitempty" yaml:"last_modified,omitempty"`
 	Users           []*User   `json:"users,omitempty" xml:"users,omitempty" yaml:"users,omitempty"`
@@ -79,6 +122,7 @@ func NewDatabase(fp string) (*Database, error) {
 			return nil, errors.ErrNewDatabase.WithArgs(fp, err)
 		}
 		db.Version = app.Version
+		db.enforceDefaultPolicy()
 		if err := db.commit(); err != nil {
 			return nil, errors.ErrNewDatabase.WithArgs(fp, err)
 		}
@@ -92,6 +136,11 @@ func NewDatabase(fp string) (*Database, error) {
 		}
 		if err := json.Unmarshal(b, db); err != nil {
 			return nil, errors.ErrNewDatabase.WithArgs(fp, err)
+		}
+		if changed := db.enforceDefaultPolicy(); changed {
+			if err := db.commit(); err != nil {
+				return nil, errors.ErrNewDatabase.WithArgs(fp, err)
+			}
 		}
 	}
 
@@ -128,6 +177,58 @@ func NewDatabase(fp string) (*Database, error) {
 	return db, nil
 }
 
+func (db *Database) enforceDefaultPolicy() bool {
+	var changes int
+	if db.Policy.Password.MinLength == 0 {
+		db.Policy.Password.MinLength = defaultPolicy.Password.MinLength
+		changes++
+	}
+	if db.Policy.Password.MaxLength == 0 {
+		db.Policy.Password.MaxLength = defaultPolicy.Password.MaxLength
+		changes++
+	}
+	if db.Policy.Password.KeepVersions == 0 {
+		db.Policy.Password.KeepVersions = defaultPolicy.Password.KeepVersions
+		changes++
+	}
+	if db.Policy.User.MinLength == 0 {
+		db.Policy.User.MinLength = defaultPolicy.User.MinLength
+		changes++
+	}
+	if db.Policy.User.MaxLength == 0 {
+		db.Policy.User.MaxLength = defaultPolicy.User.MaxLength
+		changes++
+	}
+	if changes > 0 {
+		return true
+	}
+	return false
+}
+
+func (db *Database) checkPolicyCompliance(username, password string) error {
+	if err := db.checkUserPolicyCompliance(username); err != nil {
+		return err
+	}
+	if err := db.checkPasswordPolicyCompliance(password); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *Database) checkUserPolicyCompliance(s string) error {
+	if len(s) > db.Policy.User.MaxLength || len(s) < db.Policy.User.MinLength {
+		return errors.ErrUserPolicyCompliance
+	}
+	return nil
+}
+
+func (db *Database) checkPasswordPolicyCompliance(s string) error {
+	if len(s) > db.Policy.Password.MaxLength || len(s) < db.Policy.Password.MinLength {
+		return errors.ErrPasswordPolicyCompliance
+	}
+	return nil
+}
+
 // GetPath returns the path  to Database.
 func (db *Database) GetPath() string {
 	return db.path
@@ -137,6 +238,11 @@ func (db *Database) GetPath() string {
 func (db *Database) AddUser(r *requests.Request) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	if err := db.checkPolicyCompliance(r.User.Username, r.User.Password); err != nil {
+		return errors.ErrAddUser.WithArgs(r.User.Username, err)
+	}
+
 	user, err := NewUserWithRoles(
 		r.User.Username, r.User.Password,
 		r.User.Email, r.User.FullName,
@@ -369,9 +475,13 @@ func (db *Database) ChangeUserPassword(r *requests.Request) error {
 	if err != nil {
 		return errors.ErrChangeUserPassword.WithArgs(err)
 	}
-	if err := user.ChangePassword(r); err != nil {
+	if err := db.checkPasswordPolicyCompliance(r.User.Password); err != nil {
+		return errors.ErrChangeUserPassword.WithArgs(err)
+	}
+	if err := user.ChangePassword(r, db.Policy.Password.KeepVersions); err != nil {
 		return err
 	}
+	// if db.Policy.Password.KeepVersions
 	if err := db.commit(); err != nil {
 		return errors.ErrChangeUserPassword.WithArgs(err)
 	}

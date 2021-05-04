@@ -146,6 +146,24 @@ func TestTagCompliance(t *testing.T) {
 			entry: &identity.User{},
 		},
 		{
+			name:  "test Policy struct",
+			entry: &identity.Policy{},
+		},
+		{
+			name:  "test UserPolicy struct",
+			entry: &identity.UserPolicy{},
+			opts: &Options{
+				DisableTagOnEmpty: true,
+			},
+		},
+		{
+			name:  "test PasswordPolicy struct",
+			entry: &identity.PasswordPolicy{},
+			opts: &Options{
+				DisableTagOnEmpty: true,
+			},
+		},
+		{
 			name:  "test WebAuthnRegisterRequest struct",
 			entry: &identity.WebAuthnRegisterRequest{},
 			opts: &Options{
