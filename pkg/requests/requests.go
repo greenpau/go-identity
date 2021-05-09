@@ -14,8 +14,14 @@
 
 package requests
 
+import (
+	"net/http"
+)
+
 // Request hold the data associated with identity database requests.
 type Request struct {
+	ID       string        `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
+	Source   *http.Request `json:"source,omitempty" xml:"source,omitempty" yaml:"source,omitempty"`
 	User     User
 	Query    Query
 	Key      Key
