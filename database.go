@@ -353,7 +353,7 @@ func (db *Database) AuthenticateUser(r *requests.Request) error {
 	m := make(map[string]interface{})
 	m["sub"] = user.Username
 	if email := user.GetMailClaim(); email != "" {
-		m["mail"] = email
+		m["email"] = email
 	}
 	if name := user.GetNameClaim(); name != "" {
 		m["name"] = name

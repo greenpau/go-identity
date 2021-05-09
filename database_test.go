@@ -188,7 +188,7 @@ func TestDatabaseAuthentication(t *testing.T) {
 			},
 			want: map[string]interface{}{
 				"claims": map[string]interface{}{
-					"mail":  "jsmith@gmail.com",
+					"email": "jsmith@gmail.com",
 					"name":  "Smith, John",
 					"roles": "viewer editor admin",
 					"sub":   "jsmith",
@@ -208,7 +208,7 @@ func TestDatabaseAuthentication(t *testing.T) {
 			},
 			want: map[string]interface{}{
 				"claims": map[string]interface{}{
-					"mail":  "bjones@gmail.com",
+					"email": "bjones@gmail.com",
 					"roles": "viewer",
 					"sub":   "bjones",
 				},
@@ -224,7 +224,7 @@ func TestDatabaseAuthentication(t *testing.T) {
 			},
 			want: map[string]interface{}{
 				"claims": map[string]interface{}{
-					"mail":  "jsmith@gmail.com",
+					"email": "jsmith@gmail.com",
 					"name":  "Smith, John",
 					"roles": "viewer editor admin",
 					"sub":   "jsmith",
@@ -241,7 +241,7 @@ func TestDatabaseAuthentication(t *testing.T) {
 			},
 			want: map[string]interface{}{
 				"claims": map[string]interface{}{
-					"mail":  "bjones@gmail.com",
+					"email": "bjones@gmail.com",
 					"roles": "viewer",
 					"sub":   "bjones",
 				},
