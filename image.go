@@ -24,6 +24,7 @@ type Image struct {
 	// Encoded Base64 string
 	Body   string       `json:"body,omitempty" xml:"body,omitempty" yaml:"body,omitempty"`
 	Config image.Config `json:"config,omitempty" xml:"config,omitempty" yaml:"config,omitempty"`
+	Path   string       `json:"path,omitempty" xml:"path,omitempty" yaml:"path,omitempty"`
 }
 
 // NewImage returns an instance of Image.

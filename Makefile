@@ -56,7 +56,9 @@ qtest:
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewPublicKey *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewMfaToken *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out internal/tag/*.go
-	@time richgo test -v -coverprofile=.coverage/coverage.out -run "Test.*Database.*" *.go
+	@#time richgo test -v -coverprofile=.coverage/coverage.out -run "Test.*Database.*" *.go
+	@#time richgo test -v -coverprofile=.coverage/coverage.out -run "TestDatabaseGetUsers" *.go
+	@time richgo test -v -coverprofile=.coverage/coverage.out internal/tag/*.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewEmailAddress *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewRole *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewPassword *.go

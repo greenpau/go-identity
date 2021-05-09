@@ -42,6 +42,11 @@ func (n *Name) GetNameClaim() string {
 	return n.GetFullName()
 }
 
+// ToString returns string represenation of name.
+func (n *Name) ToString() string {
+	return n.GetFullName()
+}
+
 // GetFullName returns the primary full name for User.
 func (n *Name) GetFullName() string {
 	var b strings.Builder

@@ -21,17 +21,39 @@ import (
 	"time"
 )
 
+// UserMetadata is metadata associated with a user.
+type UserMetadata struct {
+	ID           string    `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
+	Enabled      bool      `json:"enabled,omitempty" xml:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Username     string    `json:"username,omitempty" xml:"username,omitempty" yaml:"username,omitempty"`
+	Title        string    `json:"title,omitempty" xml:"title,omitempty" yaml:"title,omitempty"`
+	Name         string    `json:"name,omitempty" xml:"name,omitempty" yaml:"name,omitempty"`
+	Email        string    `json:"email,omitempty" xml:"email,omitempty" yaml:"email,omitempty"`
+	Created      time.Time `json:"created,omitempty" xml:"created,omitempty" yaml:"created,omitempty"`
+	LastModified time.Time `json:"last_modified,omitempty" xml:"last_modified,omitempty" yaml:"last_modified,omitempty"`
+	Revision     int       `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
+	Avatar       string    `json:"avatar,omitempty" xml:"avatar,omitempty" yaml:"avatar,omitempty"`
+}
+
+// UserMetadataBundle is a collection of public users.
+type UserMetadataBundle struct {
+	users []*UserMetadata
+	size  int
+}
+
 // User is a user identity.
 type User struct {
 	ID             string          `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
 	Enabled        bool            `json:"enabled,omitempty" xml:"enabled,omitempty" yaml:"enabled,omitempty"`
 	Human          bool            `json:"human,omitempty" xml:"human,omitempty" yaml:"human,omitempty"`
 	Username       string          `json:"username,omitempty" xml:"username,omitempty" yaml:"username,omitempty"`
+	Title          string          `json:"title,omitempty" xml:"title,omitempty" yaml:"title,omitempty"`
 	Name           *Name           `json:"name,omitempty" xml:"name,omitempty" yaml:"name,omitempty"`
 	Organization   *Organization   `json:"organization,omitempty" xml:"organization,omitempty" yaml:"organization,omitempty"`
 	Names          []*Name         `json:"names,omitempty" xml:"names,omitempty" yaml:"names,omitempty"`
 	Organizations  []*Organization `json:"organizations,omitempty" xml:"organizations,omitempty" yaml:"organizations,omitempty"`
 	StreetAddress  []*Location     `json:"street_address,omitempty" xml:"street_address,omitempty" yaml:"street_address,omitempty"`
+	EmailAddress   *EmailAddress   `json:"email_address,omitempty" xml:"email_address,omitempty" yaml:"email_address,omitempty"`
 	EmailAddresses []*EmailAddress `json:"email_addresses,omitempty" xml:"email_addresses,omitempty" yaml:"email_addresses,omitempty"`
 	Passwords      []*Password     `json:"passwords,omitempty" xml:"passwords,omitempty" yaml:"passwords,omitempty"`
 	PublicKeys     []*PublicKey    `json:"public_keys,omitempty" xml:"public_keys,omitempty" yaml:"public_keys,omitempty"`
@@ -42,6 +64,29 @@ type User struct {
 	LastModified   time.Time       `json:"last_modified,omitempty" xml:"last_modified,omitempty" yaml:"last_modified,omitempty"`
 	Revision       int             `json:"revision,omitempty" xml:"revision,omitempty" yaml:"revision,omitempty"`
 	Roles          []*Role         `json:"roles,omitempty" xml:"roles,omitempty" yaml:"roles,omitempty"`
+}
+
+// NewUserMetadataBundle returns an instance of UserMetadataBundle.
+func NewUserMetadataBundle() *UserMetadataBundle {
+	return &UserMetadataBundle{
+		users: []*UserMetadata{},
+	}
+}
+
+// Add adds UserMetadata to UserMetadataBundle.
+func (b *UserMetadataBundle) Add(k *UserMetadata) {
+	b.users = append(b.users, k)
+	b.size++
+}
+
+// Get returns UserMetadata instances of the UserMetadataBundle.
+func (b *UserMetadataBundle) Get() []*UserMetadata {
+	return b.users
+}
+
+// Size returns the number of UserMetadata instances in UserMetadataBundle.
+func (b *UserMetadataBundle) Size() int {
+	return b.size
 }
 
 // NewUser returns an instance of User.
@@ -131,6 +176,7 @@ func (user *User) AddEmailAddress(s string) error {
 		return err
 	}
 	if len(user.EmailAddresses) == 0 {
+		user.EmailAddress = email
 		user.EmailAddresses = append(user.EmailAddresses, email)
 		return nil
 	}
@@ -143,8 +189,8 @@ func (user *User) AddEmailAddress(s string) error {
 	return nil
 }
 
-// HasEmails checks whether a user has email address.
-func (user *User) HasEmails() bool {
+// HasEmailAddresses checks whether a user has email address.
+func (user *User) HasEmailAddresses() bool {
 	if len(user.EmailAddresses) == 0 {
 		return false
 	}
@@ -382,4 +428,27 @@ func (user *User) ChangePassword(r *requests.Request, keepVersions int) error {
 		return errors.ErrChangeUserPassword.WithArgs(err)
 	}
 	return nil
+}
+
+// GetMetadata returns user metadata.
+func (user *User) GetMetadata() *UserMetadata {
+	m := &UserMetadata{
+		ID:           user.ID,
+		Enabled:      user.Enabled,
+		Username:     user.Username,
+		Title:        user.Title,
+		Created:      user.Created,
+		LastModified: user.LastModified,
+		Revision:     user.Revision,
+	}
+	if user.Avatar != nil {
+		m.Avatar = user.Avatar.Path
+	}
+	if user.EmailAddress != nil {
+		m.Email = user.EmailAddress.ToString()
+	}
+	if user.Name != nil {
+		m.Name = user.Name.ToString()
+	}
+	return m
 }

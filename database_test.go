@@ -23,6 +23,7 @@ import (
 	"path"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 var (
@@ -390,9 +391,11 @@ func TestDatabaseAddUser(t *testing.T) {
 					Email:    "foobar@barfoo",
 				},
 			},
-			overwritePath: path.Base(databasePath),
+			overwritePath: path.Dir(databasePath),
 			shouldErr:     true,
-			err:           errors.ErrAddUser.WithArgs("foobar", errors.ErrDatabaseCommit.WithArgs("user_db.json", "open user_db.json: is a directory")),
+			err: errors.ErrAddUser.WithArgs("foobar",
+				errors.ErrDatabaseCommit.WithArgs(path.Dir(databasePath), "open "+path.Dir(databasePath)+": is a directory"),
+			),
 		},
 	}
 	for _, tc := range testcases {
@@ -481,9 +484,11 @@ func TestDatabaseChangeUserPassword(t *testing.T) {
 					Password:    NewRandomString(16),
 				},
 			},
-			overwritePath: path.Base(databasePath),
+			overwritePath: path.Dir(databasePath),
 			shouldErr:     true,
-			err:           errors.ErrChangeUserPassword.WithArgs(errors.ErrDatabaseCommit.WithArgs("user_db.json", "open user_db.json: is a directory")),
+			err: errors.ErrChangeUserPassword.WithArgs(
+				errors.ErrDatabaseCommit.WithArgs(path.Dir(databasePath), "open "+path.Dir(databasePath)+": is a directory"),
+			),
 		},
 	}
 	for _, tc := range testcases {
@@ -690,9 +695,11 @@ func TestDatabaseUserPublicKey(t *testing.T) {
 			comment:       testEmail1,
 			username:      testUser1,
 			email:         testEmail1,
-			overwritePath: path.Base(databasePath),
+			overwritePath: path.Dir(databasePath),
 			shouldErr:     true,
-			err:           errors.ErrAddPublicKey.WithArgs("ssh", errors.ErrDatabaseCommit.WithArgs("user_db.json", "open user_db.json: is a directory")),
+			err: errors.ErrAddPublicKey.WithArgs("ssh",
+				errors.ErrDatabaseCommit.WithArgs(path.Dir(databasePath), "open "+path.Dir(databasePath)+": is a directory"),
+			),
 		},
 		{
 			name:          "fail to commit when deleting rsa public key",
@@ -700,9 +707,11 @@ func TestDatabaseUserPublicKey(t *testing.T) {
 			username:      testUser1,
 			email:         testEmail1,
 			usage:         "ssh",
-			overwritePath: path.Base(databasePath),
+			overwritePath: path.Dir(databasePath),
 			shouldErr:     true,
-			err:           errors.ErrDeletePublicKey.WithArgs("ssh", errors.ErrDatabaseCommit.WithArgs("user_db.json", "open user_db.json: is a directory")),
+			err: errors.ErrDeletePublicKey.WithArgs("ssh",
+				errors.ErrDatabaseCommit.WithArgs(path.Dir(databasePath), "open "+path.Dir(databasePath)+": is a directory"),
+			),
 		},
 	}
 	for _, tc := range testcases {
@@ -1003,9 +1012,11 @@ func TestDatabaseUserMfaToken(t *testing.T) {
 					Digits:    6,
 				},
 			},
-			overwritePath: path.Base(databasePath),
+			overwritePath: path.Dir(databasePath),
 			shouldErr:     true,
-			err:           errors.ErrAddMfaToken.WithArgs(errors.ErrDatabaseCommit.WithArgs("user_db.json", "open user_db.json: is a directory")),
+			err: errors.ErrAddMfaToken.WithArgs(
+				errors.ErrDatabaseCommit.WithArgs(path.Dir(databasePath), "open "+path.Dir(databasePath)+": is a directory"),
+			),
 		},
 		{
 			name:      "fail to commit when deleting mfa token",
@@ -1019,10 +1030,10 @@ func TestDatabaseUserMfaToken(t *testing.T) {
 					ID: "zzzzzzzzzzzzzzzzzzzzzzzzzz5h3s765Tpx5Laa",
 				},
 			},
-			overwritePath: path.Base(databasePath),
+			overwritePath: path.Dir(databasePath),
 			shouldErr:     true,
 			err: errors.ErrDeleteMfaToken.WithArgs("zzzzzzzzzzzzzzzzzzzzzzzzzz5h3s765Tpx5Laa",
-				errors.ErrDatabaseCommit.WithArgs("user_db.json", "open user_db.json: is a directory"),
+				errors.ErrDatabaseCommit.WithArgs(path.Dir(databasePath), "open "+path.Dir(databasePath)+": is a directory"),
 			),
 		},
 	}
@@ -1094,6 +1105,79 @@ func TestDatabaseUserMfaToken(t *testing.T) {
 			bundle := tc.req.Response.(*MfaTokenBundle)
 			got := make(map[string]interface{})
 			got["token_count"] = bundle.Size()
+			tests.EvalObjectsWithLog(t, "output", tc.want, got, msgs)
+		})
+	}
+}
+
+func TestDatabaseGetUsers(t *testing.T) {
+	var databasePath string
+	db, err := createTestDatabase("TestDatabaseGetUsers")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	ts := time.Now()
+	databasePath = db.path
+	testcases := []struct {
+		name          string
+		operation     string
+		req           *requests.Request
+		overwritePath string
+		want          map[string]interface{}
+		shouldErr     bool
+		err           error
+	}{
+		{
+			name: "get users",
+			req: &requests.Request{
+				User: requests.User{
+					Username: testUser1,
+					Email:    testEmail1,
+				},
+			},
+			want: map[string]interface{}{
+				"user_count": 2,
+				"users": []*UserMetadata{
+					{
+						ID:           "000000000000000000000000000000000001",
+						Username:     "jsmith",
+						Name:         "Smith, John",
+						Email:        "jsmith@gmail.com",
+						LastModified: ts,
+						Created:      ts,
+					},
+					{
+						ID:           "000000000000000000000000000000000002",
+						Username:     "bjones",
+						Email:        "bjones@gmail.com",
+						LastModified: ts,
+						Created:      ts,
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			var err error
+			db.path = databasePath
+			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
+			msgs = append(msgs, fmt.Sprintf("database path: %s", db.path))
+
+			err = db.GetUsers(tc.req)
+			if tests.EvalErrWithLog(t, err, "get users", tc.shouldErr, tc.err, msgs) {
+				return
+			}
+			bundle := tc.req.Response.(*UserMetadataBundle)
+			got := make(map[string]interface{})
+			got["user_count"] = bundle.Size()
+			users := bundle.Get()
+			for i, user := range users {
+				user.ID = fmt.Sprintf("%036d", i+1)
+				user.LastModified = ts
+				user.Created = ts
+			}
+			got["users"] = bundle.Get()
 			tests.EvalObjectsWithLog(t, "output", tc.want, got, msgs)
 		})
 	}

@@ -58,3 +58,8 @@ func (m *EmailAddress) Primary() bool {
 	}
 	return false
 }
+
+// ToString returns string representation of an email address.
+func (m *EmailAddress) ToString() string {
+	return m.Address
+}

@@ -118,7 +118,7 @@ func NewDatabase(fp string) (*Database, error) {
 		if !os.IsNotExist(err) {
 			return nil, errors.ErrNewDatabase.WithArgs(fp, err)
 		}
-		if err := os.MkdirAll(filepath.Base(fp), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(fp), 0700); err != nil {
 			return nil, errors.ErrNewDatabase.WithArgs(fp, err)
 		}
 		db.Version = app.Version
@@ -283,6 +283,57 @@ func (db *Database) AddUser(r *requests.Request) error {
 		return errors.ErrAddUser.WithArgs(username, err)
 	}
 	return nil
+}
+
+// GetUsers return a list of user identities.
+func (db *Database) GetUsers(r *requests.Request) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	_, err := db.validateUserIdentity(r.User.Username, r.User.Email)
+	if err != nil {
+		return errors.ErrGetUsers.WithArgs(err)
+	}
+	bundle := NewUserMetadataBundle()
+	for _, user := range db.Users {
+		bundle.Add(user.GetMetadata())
+	}
+	r.Response = bundle
+	return nil
+}
+
+// GetUser return an instance of User.
+func (db *Database) GetUser(r *requests.Request) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	user, err := db.validateUserIdentity(r.User.Username, r.User.Email)
+	if err != nil {
+		return errors.ErrGetUsers.WithArgs(err)
+	}
+	r.Response = user
+	return nil
+}
+
+// DeleteUser deletes a user by user id.
+func (db *Database) DeleteUser(r *requests.Request) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	// user, err := db.validateUserIdentity(r.User.Username, r.User.Email)
+	_, err := db.validateUserIdentity(r.User.Username, r.User.Email)
+	if err != nil {
+		return errors.ErrDeleteUser.WithArgs(r.Query.ID, err)
+	}
+	return errors.ErrDeleteUser.WithArgs(r.Query.ID, "user delete operation is not supported")
+	// TODO: how do we delete a user ???
+
+	// if err := user.DeletePublicKey(r); err != nil {
+	//	return err
+	//}
+	/*
+		if err := db.commit(); err != nil {
+			return errors.ErrDeleteUser.WithArgs(r.Query.ID, err)
+		}
+		return nil
+	*/
 }
 
 // AuthenticateUser adds user identity to the database.
