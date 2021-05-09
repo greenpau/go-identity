@@ -187,11 +187,13 @@ func TestDatabaseAuthentication(t *testing.T) {
 				},
 			},
 			want: map[string]interface{}{
-				"claims": map[string]interface{}{
-					"email": "jsmith@gmail.com",
-					"name":  "Smith, John",
-					"roles": "viewer editor admin",
-					"sub":   "jsmith",
+				"claims": requests.Response{
+					Payload: map[string]interface{}{
+						"email": "jsmith@gmail.com",
+						"name":  "Smith, John",
+						"roles": "viewer editor admin",
+						"sub":   "jsmith",
+					},
 				},
 			},
 		},
@@ -207,10 +209,12 @@ func TestDatabaseAuthentication(t *testing.T) {
 				},
 			},
 			want: map[string]interface{}{
-				"claims": map[string]interface{}{
-					"email": "bjones@gmail.com",
-					"roles": "viewer",
-					"sub":   "bjones",
+				"claims": requests.Response{
+					Payload: map[string]interface{}{
+						"email": "bjones@gmail.com",
+						"roles": "viewer",
+						"sub":   "bjones",
+					},
 				},
 			},
 		},
@@ -223,11 +227,13 @@ func TestDatabaseAuthentication(t *testing.T) {
 				},
 			},
 			want: map[string]interface{}{
-				"claims": map[string]interface{}{
-					"email": "jsmith@gmail.com",
-					"name":  "Smith, John",
-					"roles": "viewer editor admin",
-					"sub":   "jsmith",
+				"claims": requests.Response{
+					Payload: map[string]interface{}{
+						"email": "jsmith@gmail.com",
+						"name":  "Smith, John",
+						"roles": "viewer editor admin",
+						"sub":   "jsmith",
+					},
 				},
 			},
 		},
@@ -240,10 +246,12 @@ func TestDatabaseAuthentication(t *testing.T) {
 				},
 			},
 			want: map[string]interface{}{
-				"claims": map[string]interface{}{
-					"email": "bjones@gmail.com",
-					"roles": "viewer",
-					"sub":   "bjones",
+				"claims": requests.Response{
+					Payload: map[string]interface{}{
+						"email": "bjones@gmail.com",
+						"roles": "viewer",
+						"sub":   "bjones",
+					},
 				},
 			},
 		},
@@ -759,7 +767,7 @@ func TestDatabaseUserPublicKey(t *testing.T) {
 				if tc.overwritePath != "" {
 					db.path = tc.overwritePath
 				}
-				bundle := r.Response.(*PublicKeyBundle)
+				bundle := r.Response.Payload.(*PublicKeyBundle)
 				var arr []string
 				for _, k := range bundle.Get() {
 					arr = append(arr, k.ID)
@@ -785,7 +793,7 @@ func TestDatabaseUserPublicKey(t *testing.T) {
 			if tests.EvalErrWithLog(t, err, "get public keys", tc.shouldErr, tc.err, msgs) {
 				return
 			}
-			bundle := r.Response.(*PublicKeyBundle)
+			bundle := r.Response.Payload.(*PublicKeyBundle)
 			got := make(map[string]interface{})
 			got["key_count"] = bundle.Size()
 			tests.EvalObjectsWithLog(t, "user", tc.want, got, msgs)
@@ -1080,7 +1088,7 @@ func TestDatabaseUserMfaToken(t *testing.T) {
 					break
 				}
 				// Delete all keys.
-				bundle := tc.req.Response.(*MfaTokenBundle)
+				bundle := tc.req.Response.Payload.(*MfaTokenBundle)
 				var arr []string
 				for _, k := range bundle.Get() {
 					arr = append(arr, k.ID)
@@ -1102,7 +1110,7 @@ func TestDatabaseUserMfaToken(t *testing.T) {
 			if tests.EvalErrWithLog(t, err, "get mfa tokens", tc.shouldErr, tc.err, msgs) {
 				return
 			}
-			bundle := tc.req.Response.(*MfaTokenBundle)
+			bundle := tc.req.Response.Payload.(*MfaTokenBundle)
 			got := make(map[string]interface{})
 			got["token_count"] = bundle.Size()
 			tests.EvalObjectsWithLog(t, "output", tc.want, got, msgs)
@@ -1168,7 +1176,7 @@ func TestDatabaseGetUsers(t *testing.T) {
 			if tests.EvalErrWithLog(t, err, "get users", tc.shouldErr, tc.err, msgs) {
 				return
 			}
-			bundle := tc.req.Response.(*UserMetadataBundle)
+			bundle := tc.req.Response.Payload.(*UserMetadataBundle)
 			got := make(map[string]interface{})
 			got["user_count"] = bundle.Size()
 			users := bundle.Get()

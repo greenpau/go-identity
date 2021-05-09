@@ -297,7 +297,7 @@ func (db *Database) GetUsers(r *requests.Request) error {
 	for _, user := range db.Users {
 		bundle.Add(user.GetMetadata())
 	}
-	r.Response = bundle
+	r.Response.Payload = bundle
 	return nil
 }
 
@@ -309,7 +309,7 @@ func (db *Database) GetUser(r *requests.Request) error {
 	if err != nil {
 		return errors.ErrGetUsers.WithArgs(err)
 	}
-	r.Response = user
+	r.Response.Payload = user
 	return nil
 }
 
@@ -365,7 +365,7 @@ func (db *Database) AuthenticateUser(r *requests.Request) error {
 	if r.Flags.Enabled {
 		user.GetFlags(r)
 	}
-	r.Response = m
+	r.Response.Payload = m
 	return nil
 }
 
@@ -497,7 +497,7 @@ func (db *Database) GetPublicKeys(r *requests.Request) error {
 		}
 		bundle.Add(k)
 	}
-	r.Response = bundle
+	r.Response.Payload = bundle
 	return nil
 }
 
@@ -571,7 +571,7 @@ func (db *Database) GetMfaTokens(r *requests.Request) error {
 		}
 		bundle.Add(token)
 	}
-	r.Response = bundle
+	r.Response.Payload = bundle
 	return nil
 }
 

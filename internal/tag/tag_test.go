@@ -175,7 +175,6 @@ func TestTagCompliance(t *testing.T) {
 				DisableTagMismatch: true,
 			},
 		},
-
 		{
 			name:  "test requests.User struct",
 			entry: &requests.User{},
@@ -214,6 +213,11 @@ func TestTagCompliance(t *testing.T) {
 		{
 			name:  "test identity.UserMetadataBundle struct",
 			entry: &identity.UserMetadataBundle{},
+			opts:  &Options{},
+		},
+		{
+			name:  "test requests.Response struct",
+			entry: &requests.Response{},
 			opts:  &Options{},
 		},
 	}

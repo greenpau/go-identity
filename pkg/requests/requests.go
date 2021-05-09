@@ -28,7 +28,14 @@ type Request struct {
 	MfaToken MfaToken
 	WebAuthn WebAuthn
 	Flags    Flags
-	Response interface{}
+	Response Response
+}
+
+// Response hold the response associated with identity database requests.
+type Response struct {
+	Code        int         `json:"code,omitempty" xml:"code,omitempty" yaml:"code,omitempty"`
+	RedirectURL string      `json:"redirect_url,omitempty" xml:"redirect_url,omitempty" yaml:"redirect_url,omitempty"`
+	Payload     interface{} `json:"payload,omitempty" xml:"payload,omitempty" yaml:"payload,omitempty"`
 }
 
 // Query hold request query attributes.
