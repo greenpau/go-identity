@@ -15,36 +15,55 @@
 package requests
 
 import (
+	"go.uber.org/zap"
 	"net/http"
 )
 
 // Request hold the data associated with identity database
 type Request struct {
-	ID       string   `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
-	Upstream Upstream `json:"upstream,omitempty" xml:"upstream,omitempty" yaml:"upstream,omitempty"`
-	User     User     `json:"user,omitempty" xml:"user,omitempty" yaml:"user,omitempty"`
-	Query    Query    `json:"query,omitempty" xml:"query,omitempty" yaml:"query,omitempty"`
-	Key      Key      `json:"key,omitempty" xml:"key,omitempty" yaml:"key,omitempty"`
-	MfaToken MfaToken `json:"mfa_token,omitempty" xml:"mfa_token,omitempty" yaml:"mfa_token,omitempty"`
-	WebAuthn WebAuthn `json:"web_authn,omitempty" xml:"web_authn,omitempty" yaml:"web_authn,omitempty"`
-	Flags    Flags    `json:"flags,omitempty" xml:"flags,omitempty" yaml:"flags,omitempty"`
-	Response Response `json:"response,omitempty" xml:"response,omitempty" yaml:"response,omitempty"`
+	ID       string      `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
+	Upstream Upstream    `json:"upstream,omitempty" xml:"upstream,omitempty" yaml:"upstream,omitempty"`
+	Sandbox  Sandbox     `json:"sandbox,omitempty" xml:"sandbox,omitempty" yaml:"sandbox,omitempty"`
+	User     User        `json:"user,omitempty" xml:"user,omitempty" yaml:"user,omitempty"`
+	Query    Query       `json:"query,omitempty" xml:"query,omitempty" yaml:"query,omitempty"`
+	Key      Key         `json:"key,omitempty" xml:"key,omitempty" yaml:"key,omitempty"`
+	MfaToken MfaToken    `json:"mfa_token,omitempty" xml:"mfa_token,omitempty" yaml:"mfa_token,omitempty"`
+	WebAuthn WebAuthn    `json:"web_authn,omitempty" xml:"web_authn,omitempty" yaml:"web_authn,omitempty"`
+	Flags    Flags       `json:"flags,omitempty" xml:"flags,omitempty" yaml:"flags,omitempty"`
+	Response Response    `json:"response,omitempty" xml:"response,omitempty" yaml:"response,omitempty"`
+	Logger   *zap.Logger `json:"logger,omitempty" xml:"logger,omitempty" yaml:"logger,omitempty"`
 }
 
 // Response hold the response associated with identity database
 type Response struct {
-	Code        int         `json:"code,omitempty" xml:"code,omitempty" yaml:"code,omitempty"`
-	RedirectURL string      `json:"redirect_url,omitempty" xml:"redirect_url,omitempty" yaml:"redirect_url,omitempty"`
-	Payload     interface{} `json:"payload,omitempty" xml:"payload,omitempty" yaml:"payload,omitempty"`
+	Code              int         `json:"code,omitempty" xml:"code,omitempty" yaml:"code,omitempty"`
+	RedirectURL       string      `json:"redirect_url,omitempty" xml:"redirect_url,omitempty" yaml:"redirect_url,omitempty"`
+	Payload           interface{} `json:"payload,omitempty" xml:"payload,omitempty" yaml:"payload,omitempty"`
+	RedirectTokenName string      `json:"redirect_token_name,omitempty" xml:"redirect_token_name,omitempty" yaml:"redirect_token_name,omitempty"`
+	Authenticated     bool        `json:"authenticated,omitempty" xml:"authenticated,omitempty" yaml:"authenticated,omitempty"`
+	Authorized        bool        `json:"authorized,omitempty" xml:"authorized,omitempty" yaml:"authorized,omitempty"`
+	// Workflow is the type of workflow the response should follow.
+	Workflow string `json:"workflow,omitempty" xml:"workflow,omitempty" yaml:"workflow,omitempty"`
+	Title    string `json:"title,omitempty" xml:"title,omitempty" yaml:"title,omitempty"`
+	Message  string `json:"message,omitempty" xml:"message,omitempty" yaml:"message,omitempty"`
 }
 
 // Upstream hold the upstream request handler metadata.
 type Upstream struct {
-	Request  *http.Request `json:"request,omitempty" xml:"request,omitempty" yaml:"request,omitempty"`
-	BaseURL  string        `json:"base_url,omitempty" xml:"base_url,omitempty" yaml:"base_url,omitempty"`
-	BasePath string        `json:"base_path,omitempty" xml:"base_path,omitempty" yaml:"base_path,omitempty"`
-	Method   string        `json:"method,omitempty" xml:"method,omitempty" yaml:"method,omitempty"`
-	Realm    string        `json:"realm,omitempty" xml:"realm,omitempty" yaml:"realm,omitempty"`
+	Request     *http.Request `json:"request,omitempty" xml:"request,omitempty" yaml:"request,omitempty"`
+	BaseURL     string        `json:"base_url,omitempty" xml:"base_url,omitempty" yaml:"base_url,omitempty"`
+	BasePath    string        `json:"base_path,omitempty" xml:"base_path,omitempty" yaml:"base_path,omitempty"`
+	Method      string        `json:"method,omitempty" xml:"method,omitempty" yaml:"method,omitempty"`
+	Realm       string        `json:"realm,omitempty" xml:"realm,omitempty" yaml:"realm,omitempty"`
+	ContentType string        `json:"content_type,omitempty" xml:"content_type,omitempty" yaml:"content_type,omitempty"`
+	CookieNames []string      `json:"cookie_names,omitempty" xml:"cookie_names,omitempty" yaml:"cookie_names,omitempty"`
+}
+
+// Sandbox hold the data relevant to the user sandbox.
+type Sandbox struct {
+	ID     string `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
+	View   string `json:"view,omitempty" xml:"view,omitempty" yaml:"view,omitempty"`
+	Action string `json:"action,omitempty" xml:"action,omitempty" yaml:"action,omitempty"`
 }
 
 // Query hold request query attributes.

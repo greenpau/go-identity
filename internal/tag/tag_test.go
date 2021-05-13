@@ -222,6 +222,11 @@ func TestTagCompliance(t *testing.T) {
 			entry: &requests.Upstream{},
 			opts:  &Options{},
 		},
+		{
+			name:  "test requests.Sandbox struct",
+			entry: &requests.Sandbox{},
+			opts:  &Options{},
+		},
 	}
 
 	for _, tc := range testcases {
