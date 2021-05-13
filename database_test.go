@@ -185,14 +185,22 @@ func TestDatabaseAuthentication(t *testing.T) {
 					Username: testUser1,
 					Password: testPwd1,
 				},
+				Upstream: requests.Upstream{
+					BaseURL:  "https://localhost",
+					BasePath: "/auth",
+					Method:   "local",
+					Realm:    "local",
+				},
 			},
 			want: map[string]interface{}{
 				"claims": requests.Response{
+					Code: 200,
 					Payload: map[string]interface{}{
-						"email": "jsmith@gmail.com",
-						"name":  "Smith, John",
-						"roles": "viewer editor admin",
-						"sub":   "jsmith",
+						"email":  "jsmith@gmail.com",
+						"name":   "Smith, John",
+						"origin": "https://localhost/auth/local/local",
+						"roles":  "viewer editor admin",
+						"sub":    "jsmith",
 					},
 				},
 			},
@@ -207,13 +215,21 @@ func TestDatabaseAuthentication(t *testing.T) {
 				Flags: requests.Flags{
 					Enabled: true,
 				},
+				Upstream: requests.Upstream{
+					BaseURL:  "https://localhost",
+					BasePath: "/auth",
+					Method:   "local",
+					Realm:    "local",
+				},
 			},
 			want: map[string]interface{}{
 				"claims": requests.Response{
+					Code: 200,
 					Payload: map[string]interface{}{
-						"email": "bjones@gmail.com",
-						"roles": "viewer",
-						"sub":   "bjones",
+						"email":  "bjones@gmail.com",
+						"origin": "https://localhost/auth/local/local",
+						"roles":  "viewer",
+						"sub":    "bjones",
 					},
 				},
 			},
@@ -225,14 +241,22 @@ func TestDatabaseAuthentication(t *testing.T) {
 					Username: testEmail1,
 					Password: testPwd1,
 				},
+				Upstream: requests.Upstream{
+					BaseURL:  "https://localhost",
+					BasePath: "/auth",
+					Method:   "local",
+					Realm:    "local",
+				},
 			},
 			want: map[string]interface{}{
 				"claims": requests.Response{
+					Code: 200,
 					Payload: map[string]interface{}{
-						"email": "jsmith@gmail.com",
-						"name":  "Smith, John",
-						"roles": "viewer editor admin",
-						"sub":   "jsmith",
+						"email":  "jsmith@gmail.com",
+						"name":   "Smith, John",
+						"origin": "https://localhost/auth/local/local",
+						"roles":  "viewer editor admin",
+						"sub":    "jsmith",
 					},
 				},
 			},
@@ -244,13 +268,21 @@ func TestDatabaseAuthentication(t *testing.T) {
 					Username: testEmail2,
 					Password: testPwd2,
 				},
+				Upstream: requests.Upstream{
+					BaseURL:  "https://localhost",
+					BasePath: "/auth",
+					Method:   "local",
+					Realm:    "local",
+				},
 			},
 			want: map[string]interface{}{
 				"claims": requests.Response{
+					Code: 200,
 					Payload: map[string]interface{}{
-						"email": "bjones@gmail.com",
-						"roles": "viewer",
-						"sub":   "bjones",
+						"email":  "bjones@gmail.com",
+						"origin": "https://localhost/auth/local/local",
+						"roles":  "viewer",
+						"sub":    "bjones",
 					},
 				},
 			},
@@ -261,6 +293,12 @@ func TestDatabaseAuthentication(t *testing.T) {
 				User: requests.User{
 					Username: testUser1,
 					Password: testPwd2,
+				},
+				Upstream: requests.Upstream{
+					BaseURL:  "https://localhost",
+					BasePath: "/auth",
+					Method:   "local",
+					Realm:    "local",
 				},
 			},
 			shouldErr: true,

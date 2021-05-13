@@ -138,9 +138,6 @@ func TestTagCompliance(t *testing.T) {
 		{
 			name:  "test Request struct",
 			entry: &requests.Request{},
-			opts: &Options{
-				Disabled: true,
-			},
 		},
 		{
 			name:  "test Role struct",
@@ -218,6 +215,11 @@ func TestTagCompliance(t *testing.T) {
 		{
 			name:  "test requests.Response struct",
 			entry: &requests.Response{},
+			opts:  &Options{},
+		},
+		{
+			name:  "test requests.Upstream struct",
+			entry: &requests.Upstream{},
 			opts:  &Options{},
 		},
 	}

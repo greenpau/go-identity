@@ -22,6 +22,7 @@ import (
 	"github.com/greenpau/versioned"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -342,12 +343,14 @@ func (db *Database) AuthenticateUser(r *requests.Request) error {
 	defer db.mu.RUnlock()
 	user, err := db.getUser(r.User.Username)
 	if err != nil {
+		r.Response.Code = 400
 		// Calculate password hash as the means to prevent user discovery.
 		NewPassword(r.User.Password)
 		return errors.ErrAuthFailed.WithArgs(err)
 	}
 
 	if err := user.VerifyPassword(r.User.Password); err != nil {
+		r.Response.Code = 400
 		return errors.ErrAuthFailed.WithArgs(err)
 	}
 	m := make(map[string]interface{})
@@ -361,10 +364,12 @@ func (db *Database) AuthenticateUser(r *requests.Request) error {
 	if roles := user.GetRolesClaim(); roles != "" {
 		m["roles"] = roles
 	}
+	m["origin"] = r.Upstream.BaseURL + path.Join(r.Upstream.BasePath, r.Upstream.Method, r.Upstream.Realm)
 
 	if r.Flags.Enabled {
 		user.GetFlags(r)
 	}
+	r.Response.Code = 200
 	r.Response.Payload = m
 	return nil
 }
