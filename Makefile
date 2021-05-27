@@ -76,7 +76,7 @@ dep:
 	@go get -u github.com/kyoh86/richgo
 
 license:
-	@addlicense -c "Paul Greenberg greenpau@outlook.com" -y 2020 ./*.go ./pkg/**/*.go
+	@for f in `find ./ -type f -name '*.go'`; do addlicense -c "Paul Greenberg greenpau@outlook.com" -y 2020 $$f; done
 
 release:
 	@echo "Making release"
