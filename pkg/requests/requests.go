@@ -51,6 +51,7 @@ type Response struct {
 // Upstream hold the upstream request handler metadata.
 type Upstream struct {
 	Request     *http.Request `json:"-"`
+	SessionID   string        `json:"session_id,omitempty" xml:"session_id,omitempty" yaml:"session_id,omitempty"`
 	BaseURL     string        `json:"base_url,omitempty" xml:"base_url,omitempty" yaml:"base_url,omitempty"`
 	BasePath    string        `json:"base_path,omitempty" xml:"base_path,omitempty" yaml:"base_path,omitempty"`
 	Method      string        `json:"method,omitempty" xml:"method,omitempty" yaml:"method,omitempty"`
