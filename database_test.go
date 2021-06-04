@@ -1228,3 +1228,63 @@ func TestDatabaseGetUsers(t *testing.T) {
 		})
 	}
 }
+
+func TestDatabasePolicy(t *testing.T) {
+	var databasePath string
+	db, err := createTestDatabase("TestDatabasePolicy")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	databasePath = db.path
+	testcases := []struct {
+		name          string
+		operation     string
+		req           *requests.Request
+		overwritePath string
+		want          map[string]interface{}
+		shouldErr     bool
+		err           error
+	}{
+		{
+			name: "get username and password policies",
+			want: map[string]interface{}{
+				"username_policy": UserPolicy{
+					MinLength:            3,
+					MaxLength:            50,
+					AllowNonAlphaNumeric: false,
+					AllowUppercase:       false,
+				},
+				"password_policy": PasswordPolicy{
+					KeepVersions:           10,
+					MinLength:              8,
+					MaxLength:              128,
+					RequireUppercase:       false,
+					RequireLowercase:       false,
+					RequireNumber:          false,
+					RequireNonAlphaNumeric: false,
+					BlockReuse:             false,
+					BlockPasswordChange:    false,
+				},
+				"username_policy_summary": "A username should be 3-50 character long string with lowercase, alpha-numeric characters",
+				"username_policy_regex":   "^[a-z][a-z0-9]{2,49}$",
+				"password_policy_summary": "A password should be 8-128 character long string",
+				"password_policy_regex":   "^.{8,128}$",
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			db.path = databasePath
+			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
+			msgs = append(msgs, fmt.Sprintf("database path: %s", db.path))
+			got := make(map[string]interface{})
+			got["username_policy"] = db.Policy.User
+			got["password_policy"] = db.Policy.Password
+			got["username_policy_regex"] = db.GetUsernamePolicyRegex()
+			got["password_policy_regex"] = db.GetPasswordPolicyRegex()
+			got["username_policy_summary"] = db.GetUsernamePolicySummary()
+			got["password_policy_summary"] = db.GetPasswordPolicySummary()
+			tests.EvalObjectsWithLog(t, "output", tc.want, got, msgs)
+		})
+	}
+}

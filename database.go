@@ -16,6 +16,7 @@ package identity
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/greenpau/go-identity/internal/utils"
 	"github.com/greenpau/go-identity/pkg/errors"
 	"github.com/greenpau/go-identity/pkg/requests"
@@ -38,19 +39,21 @@ var (
 	buildDate     string
 	defaultPolicy = Policy{
 		User: UserPolicy{
-			MinLength: 3,
-			MaxLength: 50,
+			MinLength:            3,
+			MaxLength:            50,
+			AllowNonAlphaNumeric: false,
+			AllowUppercase:       false,
 		},
 		Password: PasswordPolicy{
-			KeepVersions:        10,
-			MinLength:           8,
-			MaxLength:           128,
-			RequireUppercase:    false,
-			RequireLowercase:    false,
-			RequireNumber:       false,
-			RequireNonAlpha:     false,
-			BlockReuse:          false,
-			BlockPasswordChange: false,
+			KeepVersions:           10,
+			MinLength:              8,
+			MaxLength:              128,
+			RequireUppercase:       false,
+			RequireLowercase:       false,
+			RequireNumber:          false,
+			RequireNonAlphaNumeric: false,
+			BlockReuse:             false,
+			BlockPasswordChange:    false,
 		},
 	}
 )
@@ -74,21 +77,23 @@ type Policy struct {
 
 // PasswordPolicy represents database password policy.
 type PasswordPolicy struct {
-	KeepVersions        int  `json:"keep_versions" xml:"keep_versions" yaml:"keep_versions"`
-	MinLength           int  `json:"min_length" xml:"min_length" yaml:"min_length"`
-	MaxLength           int  `json:"max_length" xml:"max_length" yaml:"max_length"`
-	RequireUppercase    bool `json:"require_uppercase" xml:"require_uppercase" yaml:"require_uppercase"`
-	RequireLowercase    bool `json:"require_lowercase" xml:"require_lowercase" yaml:"require_lowercase"`
-	RequireNumber       bool `json:"require_number" xml:"require_number" yaml:"require_number"`
-	RequireNonAlpha     bool `json:"require_non_alpha" xml:"require_non_alpha" yaml:"require_non_alpha"`
-	BlockReuse          bool `json:"block_reuse" xml:"block_reuse" yaml:"block_reuse"`
-	BlockPasswordChange bool `json:"block_password_change" xml:"block_password_change" yaml:"block_password_change"`
+	KeepVersions           int  `json:"keep_versions" xml:"keep_versions" yaml:"keep_versions"`
+	MinLength              int  `json:"min_length" xml:"min_length" yaml:"min_length"`
+	MaxLength              int  `json:"max_length" xml:"max_length" yaml:"max_length"`
+	RequireUppercase       bool `json:"require_uppercase" xml:"require_uppercase" yaml:"require_uppercase"`
+	RequireLowercase       bool `json:"require_lowercase" xml:"require_lowercase" yaml:"require_lowercase"`
+	RequireNumber          bool `json:"require_number" xml:"require_number" yaml:"require_number"`
+	RequireNonAlphaNumeric bool `json:"require_non_alpha" xml:"require_non_alpha" yaml:"require_non_alpha"`
+	BlockReuse             bool `json:"block_reuse" xml:"block_reuse" yaml:"block_reuse"`
+	BlockPasswordChange    bool `json:"block_password_change" xml:"block_password_change" yaml:"block_password_change"`
 }
 
 // UserPolicy represents database username policy
 type UserPolicy struct {
-	MinLength int `json:"min_length" xml:"min_length" yaml:"min_length"`
-	MaxLength int `json:"max_length" xml:"max_length" yaml:"max_length"`
+	MinLength            int  `json:"min_length" xml:"min_length" yaml:"min_length"`
+	MaxLength            int  `json:"max_length" xml:"max_length" yaml:"max_length"`
+	AllowNonAlphaNumeric bool `json:"allow_non_alpha" xml:"allow_non_alpha" yaml:"allow_non_alpha"`
+	AllowUppercase       bool `json:"allow_uppercase" xml:"allow_uppercase" yaml:"allow_uppercase"`
 }
 
 // Database is user identity database.
@@ -595,4 +600,83 @@ func (db *Database) DeleteMfaToken(r *requests.Request) error {
 		return errors.ErrDeleteMfaToken.WithArgs(r.MfaToken.ID, err)
 	}
 	return nil
+}
+
+// GetUsernamePolicySummary returns the summary of username policy.
+func (db *Database) GetUsernamePolicySummary() string {
+	var sb strings.Builder
+	var charRestrictions []string
+	sb.WriteString("A username should be")
+	sb.WriteString(fmt.Sprintf(" %d-%d character long string", db.Policy.User.MinLength, db.Policy.User.MaxLength))
+	if !db.Policy.User.AllowUppercase {
+		charRestrictions = append(charRestrictions, "lowercase")
+	}
+	if !db.Policy.User.AllowNonAlphaNumeric {
+		charRestrictions = append(charRestrictions, "alpha-numeric")
+	}
+	if len(charRestrictions) > 0 {
+		sb.WriteString(fmt.Sprintf(" with %s characters", strings.Join(charRestrictions, ", ")))
+	}
+	return sb.String()
+}
+
+// GetUsernamePolicyRegex returns regex for usernames.
+func (db *Database) GetUsernamePolicyRegex() string {
+	var startChars, allowedChars string
+	if !db.Policy.User.AllowUppercase {
+		startChars = "a-z"
+		allowedChars = "a-z0-9"
+	} else {
+		startChars = "a-zA-Z"
+		allowedChars = "a-zA-Z0-9"
+	}
+	if db.Policy.User.AllowNonAlphaNumeric {
+		allowedChars += "-_."
+	}
+	return fmt.Sprintf("^[%s][%s]{%d,%d}$", startChars, allowedChars, db.Policy.User.MinLength-1, db.Policy.User.MaxLength-1)
+}
+
+// GetPasswordPolicySummary returns the summary of password policy.
+func (db *Database) GetPasswordPolicySummary() string {
+	var sb strings.Builder
+	var charRestrictions []string
+	sb.WriteString("A password should be")
+	sb.WriteString(fmt.Sprintf(" %d-%d character long string", db.Policy.Password.MinLength, db.Policy.Password.MaxLength))
+	if db.Policy.Password.RequireUppercase {
+		charRestrictions = append(charRestrictions, "uppercase")
+	}
+	if db.Policy.Password.RequireLowercase {
+		charRestrictions = append(charRestrictions, "lowercase")
+	}
+	if db.Policy.Password.RequireNumber {
+		charRestrictions = append(charRestrictions, "numbers")
+	}
+	if db.Policy.Password.RequireNonAlphaNumeric {
+		charRestrictions = append(charRestrictions, "non alpha-numeric")
+	}
+
+	if len(charRestrictions) > 0 {
+		sb.WriteString(fmt.Sprintf(" with %s characters", strings.Join(charRestrictions, ", ")))
+	}
+	return sb.String()
+}
+
+// GetPasswordPolicyRegex returns regex for passwords.
+func (db *Database) GetPasswordPolicyRegex() string {
+	var allowedChars string
+	if db.Policy.Password.RequireUppercase {
+		allowedChars += "(?=.*[A-Z])"
+	}
+	if db.Policy.Password.RequireLowercase {
+		allowedChars += "(?=.*[a-z].*[a-z])"
+	}
+	if db.Policy.Password.RequireNumber {
+		allowedChars += "(?=.*[0-9].*[0-9])"
+	}
+	if db.Policy.Password.RequireNonAlphaNumeric {
+		allowedChars += "(?=.*[~!@#$&*])"
+	}
+
+	return fmt.Sprintf("^%s.{%d,%d}$", allowedChars, db.Policy.Password.MinLength, db.Policy.Password.MaxLength)
+
 }

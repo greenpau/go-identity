@@ -58,11 +58,12 @@ qtest:
 	@#time richgo test -v -coverprofile=.coverage/coverage.out internal/tag/*.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run "Test.*Database.*" *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run "TestDatabaseGetUsers" *.go
-	@time richgo test -v -coverprofile=.coverage/coverage.out internal/tag/*.go
+	@#time richgo test -v -coverprofile=.coverage/coverage.out internal/tag/*.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewEmailAddress *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewRole *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewPassword *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewName *.go
+	@time richgo test -v -coverprofile=.coverage/coverage.out -run TestDatabasePolicy *.go
 	@go tool cover -html=.coverage/coverage.out -o .coverage/coverage.html
 	@#go tool cover -func=.coverage/coverage.out | grep -v "100.0"
 	@go tool cover -func=.coverage/coverage.out | grep database
