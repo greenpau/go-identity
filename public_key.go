@@ -19,11 +19,14 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"github.com/greenpau/go-identity/pkg/errors"
 	"github.com/greenpau/go-identity/pkg/requests"
+	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/ssh"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -111,51 +114,23 @@ func (p *PublicKey) parse() error {
 	if _, exists := supportedPublicKeyTypes[p.Usage]; !exists {
 		return errors.ErrPublicKeyInvalidUsage.WithArgs(p.Usage)
 	}
-
 	if p.Payload == "" {
 		return errors.ErrPublicKeyEmptyPayload
 	}
-
-	payloadBytes := bytes.TrimSpace([]byte(p.Payload))
-
 	switch {
 	case strings.Contains(p.Payload, "RSA PUBLIC KEY"):
-		// Processing PEM file format
-		if p.Usage != "ssh" {
-			return errors.ErrPublicKeyUsagePayloadMismatch.WithArgs(p.Usage)
-		}
-		block, _ := pem.Decode(bytes.TrimSpace([]byte(p.Payload)))
-		if block == nil {
-			return errors.ErrPublicKeyBlockType.WithArgs("")
-		}
-		if block.Type != "RSA PUBLIC KEY" {
-			return errors.ErrPublicKeyBlockType.WithArgs(block.Type)
-		}
-		publicKeyInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
-		if err != nil {
-			return errors.ErrPublicKeyParse.WithArgs(err)
-		}
-		publicKey, err := ssh.NewPublicKey(publicKeyInterface)
-		if err != nil {
-			return fmt.Errorf("failed ssh.NewPublicKey: %s", err)
-		}
-		p.Type = publicKey.Type()
-		p.FingerprintMD5 = ssh.FingerprintLegacyMD5(publicKey)
-		p.Fingerprint = ssh.FingerprintSHA256(publicKey)
-		p.Fingerprint = strings.ReplaceAll(p.Fingerprint, "SHA256:", "")
-		p.OpenSSH = string(ssh.MarshalAuthorizedKey(publicKey))
-		p.OpenSSH = strings.TrimLeft(p.OpenSSH, p.Type+" ")
-		return nil
+		return p.parsePublicKeyRSA()
 	case strings.HasPrefix(p.Payload, "ssh-rsa "):
-	default:
-		// Processing PEM file format
-		// if p.Usage != "gpg" {
-		//	return errors.ErrPublicKeyUsagePayloadMismatch.WithArgs(p.Usage)
-		//}
-		return errors.ErrPublicKeyUsageUnsupported.WithArgs(p.Usage)
+		return p.parsePublicKeyOpenSSH()
+	case strings.Contains(p.Payload, "BEGIN PGP PUBLIC KEY BLOCK"):
+		return p.parsePublicKeyPGP()
 	}
+	return errors.ErrPublicKeyUsageUnsupported.WithArgs(p.Usage)
+}
 
-	// Attempt parsing as authorized OpenSSH keys
+func (p *PublicKey) parsePublicKeyOpenSSH() error {
+	// Attempt parsing as authorized OpenSSH keys.
+	payloadBytes := bytes.TrimSpace([]byte(p.Payload))
 	i := bytes.IndexAny(payloadBytes, " \t")
 	if i == -1 {
 		i = len(payloadBytes)
@@ -183,7 +158,9 @@ func (p *PublicKey) parse() error {
 		return errors.ErrPublicKeyParse.WithArgs(err)
 	}
 	p.Type = publicKey.Type()
-	p.Comment = string(comment)
+	if string(comment) != "" {
+		p.Comment = string(comment)
+	}
 	p.FingerprintMD5 = ssh.FingerprintLegacyMD5(publicKey)
 	p.Fingerprint = ssh.FingerprintSHA256(publicKey)
 
@@ -211,5 +188,88 @@ func (p *PublicKey) parse() error {
 	default:
 		return errors.ErrPublicKeyTypeUnsupported.WithArgs(publicKey.Type())
 	}
+	return nil
+}
+
+func (p *PublicKey) parsePublicKeyPGP() error {
+	var user, algo, comment string
+	p.Payload = strings.TrimSpace(p.Payload)
+	for _, w := range []string{"BEGIN", "END"} {
+		s := fmt.Sprintf("-----%s PGP PUBLIC KEY BLOCK-----", w)
+		if (w == "BEGIN" && !strings.HasPrefix(p.Payload, s)) || (w == "END" && !strings.HasSuffix(p.Payload, s)) {
+			return errors.ErrPublicKeyParse.WithArgs(fmt.Errorf("%s PGP PUBLIC KEY BLOCK not found", w))
+		}
+	}
+	kr, err := openpgp.ReadArmoredKeyRing(bytes.NewBufferString(p.Payload))
+	if err != nil {
+		return errors.ErrPublicKeyParse.WithArgs(err)
+	}
+	if len(kr) != 1 {
+		return errors.ErrPublicKeyParse.WithArgs(fmt.Errorf("PGP keyring contains %d entries", len(kr)))
+	}
+	if kr[0].PrimaryKey == nil {
+		return errors.ErrPublicKeyParse.WithArgs(fmt.Errorf("PGP keyring entry has no public key"))
+	}
+	if kr[0].Identities == nil || len(kr[0].Identities) == 0 {
+		return errors.ErrPublicKeyParse.WithArgs(fmt.Errorf("PGP keyring entry has no identities"))
+	}
+	pk := kr[0].PrimaryKey
+	p.ID = strconv.FormatUint(pk.KeyId, 16)
+	p.Fingerprint = hex.EncodeToString(pk.Fingerprint[:])
+	switch pk.PubKeyAlgo {
+	case 1, 2, 3:
+		algo = "RSA"
+		p.Type = "rsa"
+	case 17:
+		algo = "DSA"
+		p.Type = "dsa"
+	case 18:
+		algo = "ECDH"
+		p.Type = "ecdh"
+	case 19:
+		algo = "ECDSA"
+		p.Type = "ecdsa"
+	default:
+		return errors.ErrPublicKeyParse.WithArgs(fmt.Errorf("PGP keyring entry has unsupported public key algo %v", pk.PubKeyAlgo))
+	}
+	for _, u := range kr[0].Identities {
+		user = u.Name
+		break
+	}
+	comment = fmt.Sprintf("%s, algo %s, created %s", user, algo, pk.CreationTime)
+	if p.Comment != "" {
+		p.Comment = fmt.Sprintf("%s (%s)", p.Comment, comment)
+	} else {
+		p.Comment = comment
+	}
+	return nil
+}
+
+func (p *PublicKey) parsePublicKeyRSA() error {
+	// Processing PEM file format
+	if p.Usage != "ssh" {
+		return errors.ErrPublicKeyUsagePayloadMismatch.WithArgs(p.Usage)
+	}
+	block, _ := pem.Decode(bytes.TrimSpace([]byte(p.Payload)))
+	if block == nil {
+		return errors.ErrPublicKeyBlockType.WithArgs("")
+	}
+	if block.Type != "RSA PUBLIC KEY" {
+		return errors.ErrPublicKeyBlockType.WithArgs(block.Type)
+	}
+	publicKeyInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return errors.ErrPublicKeyParse.WithArgs(err)
+	}
+	publicKey, err := ssh.NewPublicKey(publicKeyInterface)
+	if err != nil {
+		return fmt.Errorf("failed ssh.NewPublicKey: %s", err)
+	}
+	p.Type = publicKey.Type()
+	p.FingerprintMD5 = ssh.FingerprintLegacyMD5(publicKey)
+	p.Fingerprint = ssh.FingerprintSHA256(publicKey)
+	p.Fingerprint = strings.ReplaceAll(p.Fingerprint, "SHA256:", "")
+	p.OpenSSH = string(ssh.MarshalAuthorizedKey(publicKey))
+	p.OpenSSH = strings.TrimLeft(p.OpenSSH, p.Type+" ")
 	return nil
 }

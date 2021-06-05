@@ -15,6 +15,8 @@
 package identity
 
 import (
+	"bufio"
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -24,9 +26,28 @@ import (
 	"github.com/greenpau/go-identity/pkg/errors"
 	"github.com/greenpau/go-identity/pkg/requests"
 	"golang.org/x/crypto/ssh"
+	"os"
 	"strings"
 	"testing"
 )
+
+func readPEMFile(fp string) string {
+	var buffer bytes.Buffer
+	fileHandle, err := os.Open(fp)
+	if err != nil {
+		panic(err)
+	}
+	defer fileHandle.Close()
+	scanner := bufio.NewScanner(fileHandle)
+	for scanner.Scan() {
+		line := scanner.Text()
+		buffer.WriteString(strings.TrimSpace(line) + "\n")
+	}
+	if err := scanner.Err(); err != nil {
+		panic(err)
+	}
+	return buffer.String()
+}
 
 func getPublicKey(t *testing.T, pk *rsa.PrivateKey, keyType string) string {
 	// Derive Public Key
@@ -90,8 +111,9 @@ func TestNewPublicKey(t *testing.T) {
 				},
 			},
 			want: map[string]interface{}{
-				"usage": "ssh",
-				"type":  "ssh-rsa",
+				"usage":   "ssh",
+				"type":    "ssh-rsa",
+				"comment": "jsmith@outlook.com",
 			},
 		},
 		{
@@ -104,8 +126,9 @@ func TestNewPublicKey(t *testing.T) {
 				},
 			},
 			want: map[string]interface{}{
-				"usage": "ssh",
-				"type":  "ssh-rsa",
+				"usage":   "ssh",
+				"type":    "ssh-rsa",
+				"comment": "jsmith@outlook.com",
 			},
 		},
 		{
@@ -163,7 +186,7 @@ func TestNewPublicKey(t *testing.T) {
 			err:       errors.ErrPublicKeyBlockType.WithArgs(""),
 		},
 		{
-			name: "test gpg public key",
+			name: "test gpg public key without end block",
 			req: &requests.Request{
 				Key: requests.Key{
 					Usage:   "gpg",
@@ -172,14 +195,33 @@ func TestNewPublicKey(t *testing.T) {
 				},
 			},
 			shouldErr: true,
-			err:       errors.ErrPublicKeyUsageUnsupported.WithArgs("gpg"),
+			err:       errors.ErrPublicKeyParse.WithArgs("END PGP PUBLIC KEY BLOCK not found"),
+		},
+		{
+			name: "test gpg public key",
+			req: &requests.Request{
+				Key: requests.Key{
+					Usage:   "gpg",
+					Payload: readPEMFile("testdata/gpg/linux_gpg_pub.pem"),
+				},
+			},
+			want: map[string]interface{}{
+				"usage":   "gpg",
+				"type":    "dsa",
+				"comment": "Google, Inc. Linux Package Signing Key <linux-packages-keymaster@google.com>, algo DSA, created 2007-03-08 15:17:10 -0500 EST",
+				"id":      "a040830f7fac5991",
+			},
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
-			msgs = append(msgs, fmt.Sprintf("private rsa key:\n%s", string(pkm)))
+			if tc.req.Key.Usage == "ssh" {
+				msgs = append(msgs, fmt.Sprintf("private rsa key:\n%s", string(pkm)))
+			} else {
+				msgs = append(msgs, fmt.Sprintf("payload:\n%s", string(tc.req.Key.Payload)))
+			}
 			// t.Logf("public key:\n%s", tc.req.Key.Payload)
 
 			if tc.req.Key.Payload == "rsa" || tc.req.Key.Payload == "openssh" {
@@ -195,6 +237,10 @@ func TestNewPublicKey(t *testing.T) {
 			got := make(map[string]interface{})
 			got["type"] = key.Type
 			got["usage"] = key.Usage
+			got["comment"] = key.Comment
+			if key.Usage == "gpg" {
+				got["id"] = key.ID
+			}
 			tests.EvalObjectsWithLog(t, "eval", tc.want, got, msgs)
 
 			bundle := NewPublicKeyBundle()

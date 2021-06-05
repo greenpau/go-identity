@@ -83,7 +83,7 @@ type PasswordPolicy struct {
 	RequireUppercase       bool `json:"require_uppercase" xml:"require_uppercase" yaml:"require_uppercase"`
 	RequireLowercase       bool `json:"require_lowercase" xml:"require_lowercase" yaml:"require_lowercase"`
 	RequireNumber          bool `json:"require_number" xml:"require_number" yaml:"require_number"`
-	RequireNonAlphaNumeric bool `json:"require_non_alpha" xml:"require_non_alpha" yaml:"require_non_alpha"`
+	RequireNonAlphaNumeric bool `json:"require_non_alpha_numeric" xml:"require_non_alpha_numeric" yaml:"require_non_alpha_numeric"`
 	BlockReuse             bool `json:"block_reuse" xml:"block_reuse" yaml:"block_reuse"`
 	BlockPasswordChange    bool `json:"block_password_change" xml:"block_password_change" yaml:"block_password_change"`
 }
@@ -92,7 +92,7 @@ type PasswordPolicy struct {
 type UserPolicy struct {
 	MinLength            int  `json:"min_length" xml:"min_length" yaml:"min_length"`
 	MaxLength            int  `json:"max_length" xml:"max_length" yaml:"max_length"`
-	AllowNonAlphaNumeric bool `json:"allow_non_alpha" xml:"allow_non_alpha" yaml:"allow_non_alpha"`
+	AllowNonAlphaNumeric bool `json:"allow_non_alpha_numeric" xml:"allow_non_alpha_numeric" yaml:"allow_non_alpha_numeric"`
 	AllowUppercase       bool `json:"allow_uppercase" xml:"allow_uppercase" yaml:"allow_uppercase"`
 }
 
