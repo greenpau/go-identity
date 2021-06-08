@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/greenpau/go-identity"
 	"github.com/greenpau/go-identity/internal/tests"
+	"github.com/greenpau/go-identity/pkg/qr"
 	"github.com/greenpau/go-identity/pkg/requests"
 	"os"
 	"path/filepath"
@@ -241,6 +242,11 @@ func TestTagCompliance(t *testing.T) {
 			entry: &requests.Sandbox{},
 			opts:  &Options{},
 		},
+		{
+			name:  "test qr.Code struct",
+			entry: &qr.Code{},
+			opts:  &Options{},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -339,7 +345,7 @@ func TestStructTagCompliance(t *testing.T) {
 		}
 		if len(msgs) > 0 {
 			t.Logf("Add the following tests:\n" + strings.Join(msgs, "\n"))
+			t.Fatal("Fix above structs")
 		}
 	}
-
 }

@@ -263,6 +263,17 @@ func NewMfaToken(req *requests.Request) (*MfaToken, error) {
 	return p, nil
 }
 
+// WebAuthnRequest processes WebAuthn requests.
+func (p *MfaToken) WebAuthnRequest(payload string) error {
+	switch p.Type {
+	case "u2f":
+	default:
+		return errors.ErrWebAuthnRequest.WithArgs("unsupported token type")
+	}
+	// payload is base64 encoded json object.
+	return errors.ErrWebAuthnRequest.WithArgs("U2F authentication is unsupported in this version")
+}
+
 // Disable disables MfaToken instance.
 func (p *MfaToken) Disable() {
 	p.Expired = true
@@ -273,6 +284,11 @@ func (p *MfaToken) Disable() {
 
 // ValidateCode validates a passcode
 func (p *MfaToken) ValidateCode(code string) error {
+	switch p.Type {
+	case "totp":
+	default:
+		return errors.ErrMfaTokenInvalidPasscode.WithArgs("unsupported token type")
+	}
 	ts := time.Now().UTC()
 	return p.ValidateCodeWithTime(code, ts)
 }

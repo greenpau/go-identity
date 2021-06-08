@@ -236,7 +236,7 @@ func (p *PublicKey) parsePublicKeyPGP() error {
 		user = u.Name
 		break
 	}
-	comment = fmt.Sprintf("%s, algo %s, created %s", user, algo, pk.CreationTime)
+	comment = fmt.Sprintf("%s, algo %s, created %s", user, algo, pk.CreationTime.UTC())
 	if p.Comment != "" {
 		p.Comment = fmt.Sprintf("%s (%s)", p.Comment, comment)
 	} else {

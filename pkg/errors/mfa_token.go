@@ -49,4 +49,5 @@ const (
 	ErrWebAuthnRegisterPublicKeyAlgorithmNotFound        StandardError = "webauthn register attestation object auth data credential public key algorithm not found"
 	ErrWebAuthnRegisterPublicKeyCurveUnsupported         StandardError = "webauthn register attestation object auth data credential public key curve_type %v is unsupported"
 	ErrWebAuthnRegisterPublicKeyTypeAlgorithmUnsupported StandardError = "webauthn register attestation object auth data credential public key type %q and algorithm %q are unsupported"
+	ErrWebAuthnRequest                                   StandardError = "webauthn request failed: %v"
 )

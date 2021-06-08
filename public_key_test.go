@@ -208,7 +208,7 @@ func TestNewPublicKey(t *testing.T) {
 			want: map[string]interface{}{
 				"usage":   "gpg",
 				"type":    "dsa",
-				"comment": "Google, Inc. Linux Package Signing Key <linux-packages-keymaster@google.com>, algo DSA, created 2007-03-08 15:17:10 -0500 EST",
+				"comment": "Google, Inc. Linux Package Signing Key <linux-packages-keymaster@google.com>, algo DSA, created 2007-03-08 20:17:10 +0000 UTC",
 				"id":      "a040830f7fac5991",
 			},
 		},
