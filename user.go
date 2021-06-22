@@ -403,18 +403,16 @@ func (user *User) DeleteMfaToken(r *requests.Request) error {
 
 // GetFlags populates request context with metadata about a user.
 func (user *User) GetFlags(r *requests.Request) {
-	if r.Flags.MfaRequired {
-		for _, token := range user.MfaTokens {
-			if token.Disabled {
-				continue
-			}
-			r.Flags.MfaConfigured = true
-			switch token.Type {
-			case "totp":
-				r.Flags.MfaApp = true
-			case "u2f":
-				r.Flags.MfaUniversal = true
-			}
+	for _, token := range user.MfaTokens {
+		if token.Disabled {
+			continue
+		}
+		r.Flags.MfaConfigured = true
+		switch token.Type {
+		case "totp":
+			r.Flags.MfaApp = true
+		case "u2f":
+			r.Flags.MfaUniversal = true
 		}
 	}
 }
