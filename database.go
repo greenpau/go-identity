@@ -63,7 +63,7 @@ func init() {
 	app.Description = "go-identity"
 	app.Documentation = "https://github.com/greenpau/go-identity"
 	app.SetVersion(appVersion, "1.1.2")
-	app.SetGitBranch(gitBranch, "master")
+	app.SetGitBranch(gitBranch, "main")
 	app.SetGitCommit(gitCommit, "v1.1.1-2-g19facdc")
 	app.SetBuildUser(buildUser, "")
 	app.SetBuildDate(buildDate, "")
