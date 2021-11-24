@@ -14,6 +14,21 @@
 
 package identity
 
+// WebAuthnAuthenticateRequest represents Webauthn Authentication request.
+type WebAuthnAuthenticateRequest struct {
+	ID                string      `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
+	Type              string      `json:"type,omitempty" xml:"type,omitempty" yaml:"type,omitempty"`
+	AuthData          *AuthData   `json:"auth_data,omitempty" xml:"auth_data,omitempty" yaml:"auth_data,omitempty"`
+	AuthDataEncoded   string      `json:"auth_data_encoded,omitempty" xml:"auth_data_encoded,omitempty" yaml:"auth_data_encoded,omitempty"`
+	ClientData        *ClientData `json:"client_data,omitempty" xml:"client_data,omitempty" yaml:"client_data,omitempty"`
+	ClientDataEncoded string      `json:"client_data_encoded,omitempty" xml:"client_data_encoded,omitempty" yaml:"client_data_encoded,omitempty"`
+	Signature         string      `json:"signature,omitempty" xml:"signature,omitempty" yaml:"signature,omitempty"`
+	SignatureEncoded  string      `json:"signature_encoded,omitempty" xml:"signature_encoded,omitempty" yaml:"signature_encoded,omitempty"`
+	clientDataBytes   []byte
+	signatureBytes    []byte
+	authDataBytes     []byte
+}
+
 // WebAuthnRegisterRequest is Webauthn Register request.
 type WebAuthnRegisterRequest struct {
 	ID                string             `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
@@ -48,7 +63,7 @@ type AttestationStatement struct {
 type AuthData struct {
 	RelyingPartyID   string          `json:"rpIdHash,omitempty" xml:"rpIdHash,omitempty" yaml:"rpIdHash,omitempty"`
 	Flags            map[string]bool `json:"flags,omitempty" xml:"flags,omitempty" yaml:"flags,omitempty"`
-	SignatureCounter int64           `json:"signatureCounter,omitempty" xml:"signatureCounter,omitempty" yaml:"signatureCounter,omitempty"`
+	SignatureCounter uint32          `json:"signatureCounter,omitempty" xml:"signatureCounter,omitempty" yaml:"signatureCounter,omitempty"`
 	Extensions       interface{}     `json:"extensions,omitempty" xml:"extensions,omitempty" yaml:"extensions,omitempty"`
 	CredentialData   *CredentialData `json:"credentialData,omitempty" xml:"credentialData,omitempty" yaml:"credentialData,omitempty"`
 }

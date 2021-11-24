@@ -15,17 +15,21 @@
 package identity
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/hmac"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/subtle"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"hash"
 	"math"
+	"math/big"
 	"strings"
 	"time"
 
@@ -41,20 +45,23 @@ type MfaTokenBundle struct {
 
 // MfaToken is a puiblic key in a public-private key pair.
 type MfaToken struct {
-	ID         string            `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
-	Type       string            `json:"type,omitempty" xml:"type,omitempty" yaml:"type,omitempty"`
-	Algorithm  string            `json:"algorithm,omitempty" xml:"algorithm,omitempty" yaml:"algorithm,omitempty"`
-	Comment    string            `json:"comment,omitempty" xml:"comment,omitempty" yaml:"comment,omitempty"`
-	Secret     string            `json:"secret,omitempty" xml:"secret,omitempty" yaml:"secret,omitempty"`
-	Period     int               `json:"period,omitempty" xml:"period,omitempty" yaml:"period,omitempty"`
-	Digits     int               `json:"digits,omitempty" xml:"digits,omitempty" yaml:"digits,omitempty"`
-	Expired    bool              `json:"expired,omitempty" xml:"expired,omitempty" yaml:"expired,omitempty"`
-	ExpiredAt  time.Time         `json:"expired_at,omitempty" xml:"expired_at,omitempty" yaml:"expired_at,omitempty"`
-	CreatedAt  time.Time         `json:"created_at,omitempty" xml:"created_at,omitempty" yaml:"created_at,omitempty"`
-	Disabled   bool              `json:"disabled,omitempty" xml:"disabled,omitempty" yaml:"disabled,omitempty"`
-	DisabledAt time.Time         `json:"disabled_at,omitempty" xml:"disabled_at,omitempty" yaml:"disabled_at,omitempty"`
-	Device     *MfaDevice        `json:"device,omitempty" xml:"device,omitempty" yaml:"device,omitempty"`
-	Parameters map[string]string `json:"parameters,omitempty" xml:"parameters,omitempty" yaml:"parameters,omitempty"`
+	ID               string            `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
+	Type             string            `json:"type,omitempty" xml:"type,omitempty" yaml:"type,omitempty"`
+	Algorithm        string            `json:"algorithm,omitempty" xml:"algorithm,omitempty" yaml:"algorithm,omitempty"`
+	Comment          string            `json:"comment,omitempty" xml:"comment,omitempty" yaml:"comment,omitempty"`
+	Secret           string            `json:"secret,omitempty" xml:"secret,omitempty" yaml:"secret,omitempty"`
+	Period           int               `json:"period,omitempty" xml:"period,omitempty" yaml:"period,omitempty"`
+	Digits           int               `json:"digits,omitempty" xml:"digits,omitempty" yaml:"digits,omitempty"`
+	Expired          bool              `json:"expired,omitempty" xml:"expired,omitempty" yaml:"expired,omitempty"`
+	ExpiredAt        time.Time         `json:"expired_at,omitempty" xml:"expired_at,omitempty" yaml:"expired_at,omitempty"`
+	CreatedAt        time.Time         `json:"created_at,omitempty" xml:"created_at,omitempty" yaml:"created_at,omitempty"`
+	Disabled         bool              `json:"disabled,omitempty" xml:"disabled,omitempty" yaml:"disabled,omitempty"`
+	DisabledAt       time.Time         `json:"disabled_at,omitempty" xml:"disabled_at,omitempty" yaml:"disabled_at,omitempty"`
+	Device           *MfaDevice        `json:"device,omitempty" xml:"device,omitempty" yaml:"device,omitempty"`
+	Parameters       map[string]string `json:"parameters,omitempty" xml:"parameters,omitempty" yaml:"parameters,omitempty"`
+	Flags            map[string]bool   `json:"flags,omitempty" xml:"flags,omitempty" yaml:"flags,omitempty"`
+	SignatureCounter uint32            `json:"signature_counter,omitempty" xml:"signature_counter,omitempty" yaml:"signature_counter,omitempty"`
+	pubkey           *ecdsa.PublicKey
 }
 
 // MfaDevice is the hardware device associated with MfaToken.
@@ -93,6 +100,7 @@ func NewMfaToken(req *requests.Request) (*MfaToken, error) {
 		ID:         GetRandomString(40),
 		CreatedAt:  time.Now().UTC(),
 		Parameters: make(map[string]string),
+		Flags:      make(map[string]bool),
 		Comment:    req.MfaToken.Comment,
 		Type:       req.MfaToken.Type,
 	}
@@ -185,9 +193,29 @@ func NewMfaToken(req *requests.Request) (*MfaToken, error) {
 		if r.AttestationObject.AuthData == nil {
 			return nil, errors.ErrWebAuthnRegisterAuthDataNotFound
 		}
+
+		// Extract rpIdHash from authData.
+		if r.AttestationObject.AuthData.RelyingPartyID == "" {
+			return nil, errors.ErrWebAuthnRegisterEmptyRelyingPartyID
+		}
+		p.Parameters["rp_id_hash"] = r.AttestationObject.AuthData.RelyingPartyID
+
+		// Extract flags from authData.
+		if r.AttestationObject.AuthData.Flags == nil {
+			return nil, errors.ErrWebAuthnRegisterEmptyFlags
+		}
+		for k, v := range r.AttestationObject.AuthData.Flags {
+			p.Flags[k] = v
+		}
+
+		// Extract signature counter from authData.
+		p.SignatureCounter = r.AttestationObject.AuthData.SignatureCounter
+
+		// Extract public key from credentialData.
 		if r.AttestationObject.AuthData.CredentialData == nil {
 			return nil, errors.ErrWebAuthnRegisterCredentialDataNotFound
 		}
+
 		if r.AttestationObject.AuthData.CredentialData.PublicKey == nil {
 			return nil, errors.ErrWebAuthnRegisterPublicKeyNotFound
 		}
@@ -264,14 +292,136 @@ func NewMfaToken(req *requests.Request) (*MfaToken, error) {
 }
 
 // WebAuthnRequest processes WebAuthn requests.
-func (p *MfaToken) WebAuthnRequest(payload string) error {
+func (p *MfaToken) WebAuthnRequest(payload string) (*WebAuthnAuthenticateRequest, error) {
 	switch p.Type {
 	case "u2f":
 	default:
-		return errors.ErrWebAuthnRequest.WithArgs("unsupported token type")
+		return nil, errors.ErrWebAuthnRequest.WithArgs("unsupported token type")
 	}
-	// payload is base64 encoded json object.
-	return errors.ErrWebAuthnRequest.WithArgs("U2F authentication is unsupported in this version")
+
+	for _, reqParam := range []string{"u2f_id", "key_type"} {
+		if _, exists := p.Parameters[reqParam]; !exists {
+			return nil, errors.ErrWebAuthnRequest.WithArgs(reqParam + " not found")
+		}
+	}
+
+	switch p.Parameters["key_type"] {
+	case "ec2":
+		if p.pubkey == nil {
+			if err := p.derivePublicKey(p.Parameters); err != nil {
+				return nil, err
+			}
+		}
+	default:
+		return nil, errors.ErrWebAuthnRequest.WithArgs("unsupported key type")
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, errors.ErrWebAuthnParse.WithArgs(err)
+	}
+
+	r := &WebAuthnAuthenticateRequest{}
+	if err := json.Unmarshal([]byte(decoded), r); err != nil {
+		return nil, errors.ErrWebAuthnParse.WithArgs(err)
+	}
+
+	// Validate key id.
+	if p.Parameters["u2f_id"] != r.ID {
+		return r, errors.ErrWebAuthnRequest.WithArgs("key id mismatch")
+	}
+
+	// Decode ClientDataJSON.
+	if strings.TrimSpace(r.ClientDataEncoded) == "" {
+		return r, errors.ErrWebAuthnRequest.WithArgs("encoded client data is empty")
+	}
+	clientDataBytes, err := base64.StdEncoding.DecodeString(r.ClientDataEncoded)
+	if err != nil {
+		return r, errors.ErrWebAuthnRequest.WithArgs("failed to decode client data")
+	}
+	clientData := &ClientData{}
+	if err := json.Unmarshal(clientDataBytes, clientData); err != nil {
+		return nil, errors.ErrWebAuthnParse.WithArgs("failed to unmarshal client data")
+	}
+	r.ClientData = clientData
+	r.clientDataBytes = clientDataBytes
+	clientDataHash := sha256.Sum256(clientDataBytes)
+	r.ClientDataEncoded = ""
+	if r.ClientData == nil {
+		return r, errors.ErrWebAuthnRequest.WithArgs("client data is nil")
+	}
+
+	// Decode Signature.
+	if strings.TrimSpace(r.SignatureEncoded) == "" {
+		return r, errors.ErrWebAuthnRequest.WithArgs("encoded signature is empty")
+	}
+	signatureBytes, err := base64.StdEncoding.DecodeString(r.SignatureEncoded)
+	if err != nil {
+		return r, errors.ErrWebAuthnRequest.WithArgs("failed to decode signature")
+	}
+	r.signatureBytes = signatureBytes
+	r.SignatureEncoded = ""
+
+	// Decode Authenticator Data.
+	// See also https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data
+	if strings.TrimSpace(r.AuthDataEncoded) == "" {
+		return r, errors.ErrWebAuthnRequest.WithArgs("encoded authenticator data is empty")
+	}
+	authDataBytes, err := base64.StdEncoding.DecodeString(r.AuthDataEncoded)
+	if err != nil {
+		return r, errors.ErrWebAuthnRequest.WithArgs("failed to decode auth data")
+	}
+	if err := r.unpackAuthData(authDataBytes); err != nil {
+		return r, errors.ErrWebAuthnRequest.WithArgs(err)
+	}
+	r.authDataBytes = authDataBytes
+	if r.AuthData == nil {
+		return r, errors.ErrWebAuthnRequest.WithArgs("auth data is nil")
+	}
+
+	// Verifying an Authentication Assertion
+	// See also https://www.w3.org/TR/webauthn-2/#sctn-verifying-assertion
+
+	// Verify that the value of C.type is the string webauthn.get.
+	if r.ClientData.Type != "webauthn.get" {
+		return r, errors.ErrWebAuthnRequest.WithArgs("client data type is not webauthn.get")
+	}
+
+	// TODO(greenpau): Verify that the value of C.origin matches the Relying Party's origin.
+
+	// TODO(greenpau): Verify that the value of C.challenge equals the base64url encoding of options.challenge.
+
+	// Verify that the rpIdHash in authData is the SHA-256 hash of the RP ID expected by
+	// the Relying Party.
+	if r.AuthData.RelyingPartyID != p.Parameters["rp_id_hash"] {
+		return r, errors.ErrWebAuthnRequest.WithArgs("rpIdHash mismatch")
+	}
+
+	// Verify that the User Present bit of the flags in authData is set.
+	if r.AuthData.Flags["UP"] != true {
+		return r, errors.ErrWebAuthnRequest.WithArgs("authData User Present bit is not set")
+	}
+
+	// TODO(greenpau): If user verification is required for this assertion, verify that the User
+	// Verified bit of the flags in authData is set.
+	// This requires checking UV key in p.Flags.
+
+	// Verify signature.
+	signedData := append(authDataBytes, clientDataHash[:]...)
+	crt := &x509.Certificate{
+		PublicKey: p.pubkey,
+	}
+
+	switch p.Parameters["key_algo"] {
+	case "es256":
+		if err := crt.CheckSignature(x509.ECDSAWithSHA256, signedData, signatureBytes); err != nil {
+			return r, errors.ErrWebAuthnRequest.WithArgs(err)
+		}
+	default:
+		return r, errors.ErrWebAuthnRequest.WithArgs("failed signature verification due to unsupported algo")
+	}
+
+	return r, nil
 }
 
 // Disable disables MfaToken instance.
@@ -351,4 +501,72 @@ func generateMfaCode(secret, algo string, digits int, ts uint64) (string, error)
 	mod := int32(val % int64(math.Pow10(digits)))
 	wrap := fmt.Sprintf("%%0%dd", digits)
 	return fmt.Sprintf(wrap, mod), nil
+}
+
+func (p *MfaToken) derivePublicKey(params map[string]string) error {
+	for _, reqParam := range []string{"curve_xcoord", "curve_ycoord", "key_algo"} {
+		if _, exists := params[reqParam]; !exists {
+			return errors.ErrWebAuthnRequest.WithArgs(reqParam + " not found")
+		}
+	}
+
+	var coords []*big.Int
+	for _, ltr := range []string{"x", "y"} {
+		coord := "curve_" + ltr + "coord"
+		b, err := base64.StdEncoding.DecodeString(params[coord])
+		if err != nil {
+			return errors.ErrWebAuthnRegisterPublicKeyCurveCoord.WithArgs(ltr, err)
+		}
+		if len(b) != 32 {
+			return errors.ErrWebAuthnRegisterPublicKeyCurveCoord.WithArgs(ltr, "not 32 bytes in length")
+		}
+		i := new(big.Int)
+		i.SetBytes(b)
+		coords = append(coords, i)
+	}
+
+	switch params["key_algo"] {
+	case "es256":
+		p.pubkey = &ecdsa.PublicKey{Curve: elliptic.P256(), X: coords[0], Y: coords[1]}
+	default:
+		return errors.ErrWebAuthnRegisterPublicKeyAlgorithmUnsupported.WithArgs(params["key_algo"])
+	}
+	return nil
+}
+
+func (r *WebAuthnAuthenticateRequest) unpackAuthData(b []byte) error {
+	data := new(AuthData)
+	if len(b) < 37 {
+		return fmt.Errorf("auth data is less than 37 bytes long")
+	}
+	data.RelyingPartyID = fmt.Sprintf("%x", b[0:32])
+	data.Flags = make(map[string]bool)
+	for _, st := range []struct {
+		k string
+		v byte
+	}{
+		{"UP", 0x001},
+		{"RFU1", 0x002},
+		{"UV", 0x004},
+		{"RFU2a", 0x008},
+		{"RFU2b", 0x010},
+		{"RFU2c", 0x020},
+		{"AT", 0x040},
+		{"ED", 0x080},
+	} {
+		if (b[32] & st.v) == st.v {
+			data.Flags[st.k] = true
+		} else {
+			data.Flags[st.k] = false
+		}
+	}
+	data.SignatureCounter = binary.BigEndian.Uint32(b[33:37])
+
+	// TODO(greenpau): implement AT parser.
+	// if (data.Flags["AT"] == true) && len(b) > 37 {
+	//   // Extract attested credentials data.
+	// }
+
+	r.AuthData = data
+	return nil
 }

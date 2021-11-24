@@ -42,6 +42,8 @@ const (
 	ErrWebAuthnRegisterAttestationObjectNotFound         StandardError = "webauthn register attestation object not found"
 	ErrWebAuthnRegisterAuthDataNotFound                  StandardError = "webauthn register attestation object auth data not found"
 	ErrWebAuthnRegisterCredentialDataNotFound            StandardError = "webauthn register attestation object auth data credential not found"
+	ErrWebAuthnRegisterEmptyRelyingPartyID               StandardError = "webauthn register attestation object auth data rpIdHash empty"
+	ErrWebAuthnRegisterEmptyFlags                        StandardError = "webauthn register attestation object auth data flags empty"
 	ErrWebAuthnRegisterPublicKeyNotFound                 StandardError = "webauthn register attestation object auth data credential public key not found"
 	ErrWebAuthnRegisterPublicKeyUnsupported              StandardError = "webauthn register attestation object auth data credential public key type %v is unsupported"
 	ErrWebAuthnRegisterPublicKeyTypeNotFound             StandardError = "webauthn register attestation object auth data credential public key type not found"
@@ -49,5 +51,6 @@ const (
 	ErrWebAuthnRegisterPublicKeyAlgorithmNotFound        StandardError = "webauthn register attestation object auth data credential public key algorithm not found"
 	ErrWebAuthnRegisterPublicKeyCurveUnsupported         StandardError = "webauthn register attestation object auth data credential public key curve_type %v is unsupported"
 	ErrWebAuthnRegisterPublicKeyTypeAlgorithmUnsupported StandardError = "webauthn register attestation object auth data credential public key type %q and algorithm %q are unsupported"
+	ErrWebAuthnRegisterPublicKeyCurveCoord               StandardError = "webauthn register attestation object auth data credential public key curve %v coordinate error: %v"
 	ErrWebAuthnRequest                                   StandardError = "webauthn request failed: %v"
 )

@@ -247,6 +247,11 @@ func TestTagCompliance(t *testing.T) {
 			entry: &qr.Code{},
 			opts:  &Options{},
 		},
+		{
+			name:  "test identity.WebAuthnAuthenticateRequest struct",
+			entry: &identity.WebAuthnAuthenticateRequest{},
+			opts:  &Options{},
+		},
 	}
 
 	for _, tc := range testcases {
