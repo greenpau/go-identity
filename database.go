@@ -23,7 +23,6 @@ import (
 	"github.com/greenpau/versioned"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -354,28 +353,23 @@ func (db *Database) AuthenticateUser(r *requests.Request) error {
 		return errors.ErrAuthFailed.WithArgs(err)
 	}
 
-	if err := user.VerifyPassword(r.User.Password); err != nil {
+	switch {
+	case r.User.Password != "":
+		if err := user.VerifyPassword(r.User.Password); err != nil {
+			r.Response.Code = 400
+			return errors.ErrAuthFailed.WithArgs(err)
+		}
+	case r.WebAuthn.Request != "":
+		if err := user.VerifyWebAuthnRequest(r); err != nil {
+			r.Response.Code = 400
+			return errors.ErrAuthFailed.WithArgs(err)
+		}
+	default:
 		r.Response.Code = 400
-		return errors.ErrAuthFailed.WithArgs(err)
+		return errors.ErrAuthFailed.WithArgs("malformed auth request")
 	}
-	m := make(map[string]interface{})
-	m["sub"] = user.Username
-	if email := user.GetMailClaim(); email != "" {
-		m["email"] = email
-	}
-	if name := user.GetNameClaim(); name != "" {
-		m["name"] = name
-	}
-	if roles := user.GetRolesClaim(); roles != "" {
-		m["roles"] = roles
-	}
-	m["origin"] = r.Upstream.BaseURL + path.Join(r.Upstream.BasePath, r.Upstream.Method, r.Upstream.Realm)
 
-	if r.Flags.Enabled {
-		user.GetFlags(r)
-	}
 	r.Response.Code = 200
-	r.Response.Payload = m
 	return nil
 }
 
@@ -399,6 +393,9 @@ func (db *Database) getUserByID(s string) (*User, error) {
 
 // getUserByUsername returns a user by username
 func (db *Database) getUserByUsername(s string) (*User, error) {
+	if len(s) < 2 {
+		return nil, errors.ErrDatabaseUserNotFound
+	}
 	s = strings.ToLower(s)
 	user, exists := db.refUsername[s]
 	if exists && user != nil {
@@ -410,6 +407,9 @@ func (db *Database) getUserByUsername(s string) (*User, error) {
 // getUserByEmailAddress returns a liast of users associated with a specific email
 // address.
 func (db *Database) getUserByEmailAddress(s string) (*User, error) {
+	if len(s) < 6 {
+		return nil, errors.ErrDatabaseUserNotFound
+	}
 	s = strings.ToLower(s)
 	user, exists := db.refEmailAddress[s]
 	if exists && user != nil {
@@ -547,6 +547,31 @@ func (db *Database) ChangeUserPassword(r *requests.Request) error {
 		return errors.ErrChangeUserPassword.WithArgs(err)
 	}
 	return nil
+}
+
+// IdentifyUser returns user identity and a list of challenges that should be
+// satisfied prior to successfully authenticating a user.
+func (db *Database) IdentifyUser(r *requests.Request) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	user, err := db.getUser(r.User.Username)
+	if err != nil {
+		r.User.Username = "nobody"
+		r.User.Email = "nobody@localhost"
+		r.User.Challenges = []string{"password"}
+		return nil
+	}
+	if r.Flags.Enabled {
+		user.GetFlags(r)
+	}
+	r.User.Username = user.Username
+	r.User.Email = user.GetMailClaim()
+	r.User.FullName = user.GetNameClaim()
+	r.User.Roles = user.GetRolesClaim()
+	r.User.Challenges = user.GetChallenges()
+	r.Response.Code = 200
+	return nil
+
 }
 
 // AddMfaToken adds MFA token for a user.

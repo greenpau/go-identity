@@ -14,6 +14,12 @@
 
 package identity
 
+import (
+	"encoding/base64"
+	"encoding/json"
+	"github.com/greenpau/go-identity/pkg/errors"
+)
+
 // WebAuthnAuthenticateRequest represents Webauthn Authentication request.
 type WebAuthnAuthenticateRequest struct {
 	ID                string      `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
@@ -95,4 +101,16 @@ type ClientData struct {
 type Device struct {
 	Name string `json:"name,omitempty" xml:"name,omitempty" yaml:"name,omitempty"`
 	Type string `json:"type,omitempty" xml:"type,omitempty" yaml:"type,omitempty"`
+}
+
+func unpackWebAuthnRequest(s string) (*WebAuthnAuthenticateRequest, error) {
+	decoded, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return nil, errors.ErrWebAuthnParse.WithArgs(err)
+	}
+	r := &WebAuthnAuthenticateRequest{}
+	if err := json.Unmarshal([]byte(decoded), r); err != nil {
+		return nil, errors.ErrWebAuthnParse.WithArgs(err)
+	}
+	return r, nil
 }

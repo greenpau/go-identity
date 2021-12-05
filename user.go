@@ -268,6 +268,40 @@ func (user *User) VerifyPassword(s string) error {
 	return errors.ErrUserPasswordInvalid
 }
 
+// VerifyWebAuthnRequest authenticated WebAuthn requests.
+func (user *User) VerifyWebAuthnRequest(r *requests.Request) error {
+	req, err := unpackWebAuthnRequest(r.WebAuthn.Request)
+	if err != nil {
+		return err
+	}
+	for _, token := range user.MfaTokens {
+		if token.Disabled {
+			continue
+		}
+		if token.Type != "u2f" {
+			continue
+		}
+		if _, exists := token.Parameters["u2f_id"]; !exists {
+			continue
+		}
+		if req.ID != token.Parameters["u2f_id"] {
+			continue
+		}
+		resp, err := token.WebAuthnRequest(r.WebAuthn.Request)
+		if err != nil {
+			return errors.ErrWebAuthnVerifyRequest
+		}
+		if resp == nil {
+			return errors.ErrWebAuthnVerifyRequest
+		}
+		if resp.ClientData.Challenge != r.WebAuthn.Challenge {
+			return errors.ErrWebAuthnVerifyRequest
+		}
+		return nil
+	}
+	return errors.ErrWebAuthnVerifyRequest
+}
+
 // GetMailClaim returns primary email address.
 func (user *User) GetMailClaim() string {
 	if len(user.EmailAddresses) == 0 {
@@ -293,15 +327,15 @@ func (user *User) GetNameClaim() string {
 }
 
 // GetRolesClaim returns name field of a claim.
-func (user *User) GetRolesClaim() string {
+func (user *User) GetRolesClaim() []string {
+	var roles []string
 	if len(user.Roles) == 0 {
-		return ""
+		return roles
 	}
-	roles := []string{}
 	for _, role := range user.Roles {
 		roles = append(roles, role.String())
 	}
-	return strings.Join(roles, " ")
+	return roles
 }
 
 // GetFullName returns the primary full name for a user.
@@ -449,4 +483,15 @@ func (user *User) GetMetadata() *UserMetadata {
 		m.Name = user.Name.ToString()
 	}
 	return m
+}
+
+// GetChallenges returns a list of challenges that should be
+// satisfied prior to successfully authenticating a user.
+func (user *User) GetChallenges() []string {
+	var challenges []string
+	challenges = append(challenges, "password")
+	if len(user.MfaTokens) > 0 {
+		challenges = append(challenges, "mfa")
+	}
+	return challenges
 }

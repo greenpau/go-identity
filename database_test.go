@@ -193,16 +193,12 @@ func TestDatabaseAuthentication(t *testing.T) {
 				},
 			},
 			want: map[string]interface{}{
-				"claims": requests.Response{
-					Code: 200,
-					Payload: map[string]interface{}{
-						"email":  "jsmith@gmail.com",
-						"name":   "Smith, John",
-						"origin": "https://localhost/auth/local/local",
-						"roles":  "viewer editor admin",
-						"sub":    "jsmith",
-					},
-				},
+				"code":       200,
+				"email":      "jsmith@gmail.com",
+				"name":       "Smith, John",
+				"roles":      []string{"viewer", "editor", "admin"},
+				"sub":        "jsmith",
+				"challenges": []string{"password"},
 			},
 		},
 		{
@@ -223,15 +219,11 @@ func TestDatabaseAuthentication(t *testing.T) {
 				},
 			},
 			want: map[string]interface{}{
-				"claims": requests.Response{
-					Code: 200,
-					Payload: map[string]interface{}{
-						"email":  "bjones@gmail.com",
-						"origin": "https://localhost/auth/local/local",
-						"roles":  "viewer",
-						"sub":    "bjones",
-					},
-				},
+				"code":       200,
+				"email":      "bjones@gmail.com",
+				"roles":      []string{"viewer"},
+				"sub":        "bjones",
+				"challenges": []string{"password"},
 			},
 		},
 		{
@@ -249,16 +241,12 @@ func TestDatabaseAuthentication(t *testing.T) {
 				},
 			},
 			want: map[string]interface{}{
-				"claims": requests.Response{
-					Code: 200,
-					Payload: map[string]interface{}{
-						"email":  "jsmith@gmail.com",
-						"name":   "Smith, John",
-						"origin": "https://localhost/auth/local/local",
-						"roles":  "viewer editor admin",
-						"sub":    "jsmith",
-					},
-				},
+				"code":       200,
+				"email":      "jsmith@gmail.com",
+				"name":       "Smith, John",
+				"roles":      []string{"viewer", "editor", "admin"},
+				"sub":        "jsmith",
+				"challenges": []string{"password"},
 			},
 		},
 		{
@@ -276,15 +264,11 @@ func TestDatabaseAuthentication(t *testing.T) {
 				},
 			},
 			want: map[string]interface{}{
-				"claims": requests.Response{
-					Code: 200,
-					Payload: map[string]interface{}{
-						"email":  "bjones@gmail.com",
-						"origin": "https://localhost/auth/local/local",
-						"roles":  "viewer",
-						"sub":    "bjones",
-					},
-				},
+				"code":       200,
+				"email":      "bjones@gmail.com",
+				"roles":      []string{"viewer"},
+				"sub":        "bjones",
+				"challenges": []string{"password"},
 			},
 		},
 		{
@@ -341,14 +325,24 @@ func TestDatabaseAuthentication(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			var err error
+			got := make(map[string]interface{})
 			msgs := []string{fmt.Sprintf("test name: %s", tc.name)}
 			msgs = append(msgs, fmt.Sprintf("database path: %s", db.path))
+			err = db.IdentifyUser(tc.req)
+
+			got["sub"] = tc.req.User.Username
+			got["email"] = tc.req.User.Email
+			if tc.req.User.FullName != "" {
+				got["name"] = tc.req.User.FullName
+			}
+			got["roles"] = tc.req.User.Roles
+			got["challenges"] = tc.req.User.Challenges
+
 			err = db.AuthenticateUser(tc.req)
 			if tests.EvalErrWithLog(t, err, "authenticate", tc.shouldErr, tc.err, msgs) {
 				return
 			}
-			got := make(map[string]interface{})
-			got["claims"] = tc.req.Response
+			got["code"] = tc.req.Response.Code
 			tests.EvalObjectsWithLog(t, "eval", tc.want, got, msgs)
 
 			user, err := db.getUser(tc.req.User.Username)

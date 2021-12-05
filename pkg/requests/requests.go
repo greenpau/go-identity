@@ -51,6 +51,7 @@ type Response struct {
 // Upstream hold the upstream request handler metadata.
 type Upstream struct {
 	Request     *http.Request `json:"-"`
+	Name        string        `json:"name,omitempty" xml:"name,omitempty" yaml:"name,omitempty"`
 	SessionID   string        `json:"session_id,omitempty" xml:"session_id,omitempty" yaml:"session_id,omitempty"`
 	BaseURL     string        `json:"base_url,omitempty" xml:"base_url,omitempty" yaml:"base_url,omitempty"`
 	BasePath    string        `json:"base_path,omitempty" xml:"base_path,omitempty" yaml:"base_path,omitempty"`
@@ -82,6 +83,7 @@ type User struct {
 	FullName    string   `json:"full_name,omitempty" xml:"full_name,omitempty" yaml:"full_name,omitempty"`
 	Roles       []string `json:"roles,omitempty" xml:"roles,omitempty" yaml:"roles,omitempty"`
 	Disabled    bool     `json:"disabled,omitempty" xml:"disabled,omitempty" yaml:"disabled,omitempty"`
+	Challenges  []string `json:"challenges,omitempty" xml:"challenges,omitempty" yaml:"challenges,omitempty"`
 }
 
 // Key holds crypto key attributes.

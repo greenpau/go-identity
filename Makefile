@@ -82,7 +82,8 @@ qtest:
 	@#time richgo test -v -run TestNewPublicKey *.go
 	@#time richgo test -v -run TestNewUser *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewPublicKey *.go
-	@time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewCode pkg/qr/*.go
+	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewCode pkg/qr/*.go
+	@time richgo test -v -coverprofile=.coverage/coverage.out -run TestDatabaseAuthentication *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewMfaToken *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out internal/tag/*.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run "Test.*Database.*" *.go

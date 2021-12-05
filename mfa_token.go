@@ -387,9 +387,12 @@ func (p *MfaToken) WebAuthnRequest(payload string) (*WebAuthnAuthenticateRequest
 		return r, errors.ErrWebAuthnRequest.WithArgs("client data type is not webauthn.get")
 	}
 
-	// TODO(greenpau): Verify that the value of C.origin matches the Relying Party's origin.
+	// Verify that the value of C.crossOrigin is false.
+	if r.ClientData.CrossOrigin == true {
+		return r, errors.ErrWebAuthnRequest.WithArgs("client data cross origin true is not supported")
+	}
 
-	// TODO(greenpau): Verify that the value of C.challenge equals the base64url encoding of options.challenge.
+	// TODO(greenpau): Verify that the value of C.origin matches the Relying Party's origin.
 
 	// Verify that the rpIdHash in authData is the SHA-256 hash of the RP ID expected by
 	// the Relying Party.
