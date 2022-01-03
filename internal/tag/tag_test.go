@@ -252,6 +252,16 @@ func TestTagCompliance(t *testing.T) {
 			entry: &identity.WebAuthnAuthenticateRequest{},
 			opts:  &Options{},
 		},
+		{
+			name:  "test identity.APIKeyBundle struct",
+			entry: &identity.APIKeyBundle{},
+			opts:  &Options{},
+		},
+		{
+			name:  "test identity.APIKey struct",
+			entry: &identity.APIKey{},
+			opts:  &Options{},
+		},
 	}
 
 	for _, tc := range testcases {

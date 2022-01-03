@@ -106,6 +106,7 @@ type Database struct {
 	refEmailAddress map[string]*User
 	refUsername     map[string]*User
 	refID           map[string]*User
+	refAPIKey       map[string]*User
 	path            string
 }
 
@@ -117,6 +118,7 @@ func NewDatabase(fp string) (*Database, error) {
 		refUsername:     make(map[string]*User),
 		refID:           make(map[string]*User),
 		refEmailAddress: make(map[string]*User),
+		refAPIKey:       make(map[string]*User),
 	}
 	fileInfo, err := os.Stat(fp)
 	if err != nil {
@@ -177,6 +179,12 @@ func NewDatabase(fp string) (*Database, error) {
 			if p.Algorithm == "" {
 				p.Algorithm = "bcrypt"
 			}
+		}
+		for _, apiKey := range user.APIKeys {
+			if _, exists := db.refAPIKey[apiKey.Payload]; exists {
+				return nil, errors.ErrNewDatabaseDuplicateAPIKey.WithArgs(apiKey.Payload, user)
+			}
+			db.refAPIKey[apiKey.Payload] = user
 		}
 	}
 	return db, nil
@@ -528,6 +536,81 @@ func (db *Database) DeletePublicKey(r *requests.Request) error {
 	return nil
 }
 
+// AddAPIKey adds API key for a user.
+func (db *Database) AddAPIKey(r *requests.Request) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	user, err := db.validateUserIdentity(r.User.Username, r.User.Email)
+	if err != nil {
+		return errors.ErrAddAPIKey.WithArgs(r.Key.Usage, err)
+	}
+	s := GetRandomStringFromRange(72, 96)
+	failCount := 0
+	for {
+		hk, err := NewPassword(s)
+		if err != nil {
+			if failCount > 10 {
+				return err
+			}
+			failCount++
+			continue
+		}
+		if _, exists := db.refAPIKey[hk.Hash]; exists {
+			continue
+		}
+		r.Response.Payload = s
+		r.Key.Payload = hk.Hash
+		break
+	}
+
+	if err := user.AddAPIKey(r); err != nil {
+		return err
+	}
+	if err := db.commit(); err != nil {
+		return errors.ErrAddAPIKey.WithArgs(r.Key.Usage, err)
+	}
+	return nil
+}
+
+// DeleteAPIKey deletes an API key associated with a user by key id.
+func (db *Database) DeleteAPIKey(r *requests.Request) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	user, err := db.validateUserIdentity(r.User.Username, r.User.Email)
+	if err != nil {
+		return errors.ErrDeleteAPIKey.WithArgs(r.Key.ID, err)
+	}
+	if err := user.DeleteAPIKey(r); err != nil {
+		return err
+	}
+	if err := db.commit(); err != nil {
+		return errors.ErrDeleteAPIKey.WithArgs(r.Key.Usage, err)
+	}
+	return nil
+}
+
+// GetAPIKeys returns a list of API keys associated with a user.
+func (db *Database) GetAPIKeys(r *requests.Request) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	user, err := db.validateUserIdentity(r.User.Username, r.User.Email)
+	if err != nil {
+		return errors.ErrGetAPIKeys.WithArgs(r.Key.Usage, err)
+	}
+	bundle := NewAPIKeyBundle()
+	for _, k := range user.APIKeys {
+		if k.Usage != r.Key.Usage {
+			continue
+		}
+		if k.Disabled {
+			continue
+		}
+		bundle.Add(k)
+	}
+	r.Response.Payload = bundle
+	return nil
+}
+
 // ChangeUserPassword change user password.
 func (db *Database) ChangeUserPassword(r *requests.Request) error {
 	db.mu.Lock()
@@ -571,7 +654,24 @@ func (db *Database) IdentifyUser(r *requests.Request) error {
 	r.User.Challenges = user.GetChallenges()
 	r.Response.Code = 200
 	return nil
+}
 
+// LookupAPIKey returns username and email associated with the provided API
+// key.
+func (db *Database) LookupAPIKey(r *requests.Request) error {
+	if r.Key.Payload == "" {
+		return errors.ErrLookupAPIKeyPayloadEmpty
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	user, exists := db.refAPIKey[r.Key.Payload]
+	if !exists {
+		return errors.ErrLookupAPIKeyFailed
+	}
+	r.User.Username = user.Username
+	r.User.Email = user.GetMailClaim()
+	r.Response.Code = 200
+	return nil
 }
 
 // AddMfaToken adds MFA token for a user.

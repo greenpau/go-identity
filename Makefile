@@ -82,8 +82,9 @@ qtest:
 	@#time richgo test -v -run TestNewPublicKey *.go
 	@#time richgo test -v -run TestNewUser *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewPublicKey *.go
+	@time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewAPIKey *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewCode pkg/qr/*.go
-	@time richgo test -v -coverprofile=.coverage/coverage.out -run TestDatabaseAuthentication *.go
+	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestDatabaseAuthentication *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewMfaToken *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out internal/tag/*.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run "Test.*Database.*" *.go
@@ -95,8 +96,8 @@ qtest:
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestNewName *.go
 	@#time richgo test -v -coverprofile=.coverage/coverage.out -run TestDatabasePolicy *.go
 	@go tool cover -html=.coverage/coverage.out -o .coverage/coverage.html
-	@go tool cover -func=.coverage/coverage.out | grep -v "100.0"
-	@#go tool cover -func=.coverage/coverage.out | grep database
+	@#go tool cover -func=.coverage/coverage.out | grep -v "100.0"
+	@go tool cover -func=.coverage/coverage.out | grep api_key
 	@echo "$@: complete"
 
 

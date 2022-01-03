@@ -21,6 +21,7 @@ const (
 	ErrNewDatabaseDuplicateUser   StandardError = "failed initializing database: found duplicate user %s %v"
 	ErrNewDatabaseDuplicateUserID StandardError = "failed initializing database: found duplicate user id %s %v"
 	ErrNewDatabaseDuplicateEmail  StandardError = "failed initializing database: found duplicate email address %s, %v"
+	ErrNewDatabaseDuplicateAPIKey StandardError = "failed initializing database: found duplicate api key %s, %v"
 
 	ErrDatabaseCommit       StandardError = "failed database commit to %q: %v"
 	ErrDatabaseOperation    StandardError = "database operation failed: %v"
@@ -32,6 +33,10 @@ const (
 	ErrAddPublicKey    StandardError = "failed adding %s public key: %v"
 	ErrDeletePublicKey StandardError = "failed deleting %q key: %v"
 	ErrGetPublicKeys   StandardError = "failed getting %q keys: %v"
+
+	ErrAddAPIKey    StandardError = "failed adding %s key: %v"
+	ErrDeleteAPIKey StandardError = "failed deleting %q key: %v"
+	ErrGetAPIKeys   StandardError = "failed getting %q keys: %v"
 
 	ErrChangeUserPassword   StandardError = "failed change user password: %v"
 	ErrUserPasswordNotFound StandardError = "user password not set"

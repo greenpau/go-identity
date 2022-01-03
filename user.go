@@ -57,6 +57,7 @@ type User struct {
 	EmailAddresses []*EmailAddress `json:"email_addresses,omitempty" xml:"email_addresses,omitempty" yaml:"email_addresses,omitempty"`
 	Passwords      []*Password     `json:"passwords,omitempty" xml:"passwords,omitempty" yaml:"passwords,omitempty"`
 	PublicKeys     []*PublicKey    `json:"public_keys,omitempty" xml:"public_keys,omitempty" yaml:"public_keys,omitempty"`
+	APIKeys        []*APIKey       `json:"api_keys,omitempty" xml:"api_keys,omitempty" yaml:"api_keys,omitempty"`
 	MfaTokens      []*MfaToken     `json:"mfa_tokens,omitempty" xml:"mfa_tokens,omitempty" yaml:"mfa_tokens,omitempty"`
 	Lockout        *LockoutState   `json:"lockout,omitempty" xml:"lockout,omitempty" yaml:"lockout,omitempty"`
 	Avatar         *Image          `json:"avatar,omitempty" xml:"avatar,omitempty" yaml:"avatar,omitempty"`
@@ -396,6 +397,34 @@ func (user *User) DeletePublicKey(r *requests.Request) error {
 		return errors.ErrDeletePublicKey.WithArgs(r.Key.ID, "not found")
 	}
 	user.PublicKeys = keys
+	return nil
+}
+
+// AddAPIKey adds API key to a user identity.
+func (user *User) AddAPIKey(r *requests.Request) error {
+	key, err := NewAPIKey(r)
+	if err != nil {
+		return errors.ErrAddAPIKey.WithArgs(r.Key.Usage, err)
+	}
+	user.APIKeys = append(user.APIKeys, key)
+	return nil
+}
+
+// DeleteAPIKey deletes an API key associated with a user.
+func (user *User) DeleteAPIKey(r *requests.Request) error {
+	var found bool
+	keys := []*APIKey{}
+	for _, k := range user.APIKeys {
+		if k.ID == r.Key.ID {
+			found = true
+			continue
+		}
+		keys = append(keys, k)
+	}
+	if !found {
+		return errors.ErrDeleteAPIKey.WithArgs(r.Key.ID, "not found")
+	}
+	user.APIKeys = keys
 	return nil
 }
 
