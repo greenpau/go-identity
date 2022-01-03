@@ -127,6 +127,7 @@ func NewUserWithRoles(username, password, email, fullName string, roles []string
 	if err := user.Valid(); err != nil {
 		return nil, err
 	}
+	user.Revision = 0
 	return user, nil
 }
 
@@ -167,6 +168,7 @@ func (user *User) AddPassword(s string, keepVersions int) error {
 		}
 	}
 	user.Passwords = passwords
+	user.Revise()
 	return nil
 }
 
@@ -179,6 +181,7 @@ func (user *User) AddEmailAddress(s string) error {
 	if len(user.EmailAddresses) == 0 {
 		user.EmailAddress = email
 		user.EmailAddresses = append(user.EmailAddresses, email)
+		user.Revise()
 		return nil
 	}
 	for _, e := range user.EmailAddresses {
@@ -187,6 +190,7 @@ func (user *User) AddEmailAddress(s string) error {
 		}
 	}
 	user.EmailAddresses = append(user.EmailAddresses, email)
+	user.Revise()
 	return nil
 }
 
@@ -242,6 +246,7 @@ func (user *User) AddRole(s string) error {
 	}
 	if len(user.Roles) == 0 {
 		user.Roles = append(user.Roles, role)
+		user.Revise()
 		return nil
 	}
 	for _, r := range user.Roles {
@@ -250,6 +255,7 @@ func (user *User) AddRole(s string) error {
 		}
 	}
 	user.Roles = append(user.Roles, role)
+	user.Revise()
 	return nil
 }
 
@@ -360,6 +366,7 @@ func (user *User) AddName(name *Name) error {
 		}
 	}
 	user.Names = append(user.Names, name)
+	user.Revise()
 	return nil
 }
 
@@ -379,6 +386,7 @@ func (user *User) AddPublicKey(r *requests.Request) error {
 		return errors.ErrAddPublicKey.WithArgs(r.Key.Usage, "already exists")
 	}
 	user.PublicKeys = append(user.PublicKeys, key)
+	user.Revise()
 	return nil
 }
 
@@ -397,6 +405,7 @@ func (user *User) DeletePublicKey(r *requests.Request) error {
 		return errors.ErrDeletePublicKey.WithArgs(r.Key.ID, "not found")
 	}
 	user.PublicKeys = keys
+	user.Revise()
 	return nil
 }
 
@@ -407,6 +416,7 @@ func (user *User) AddAPIKey(r *requests.Request) error {
 		return errors.ErrAddAPIKey.WithArgs(r.Key.Usage, err)
 	}
 	user.APIKeys = append(user.APIKeys, key)
+	user.Revise()
 	return nil
 }
 
@@ -425,6 +435,7 @@ func (user *User) DeleteAPIKey(r *requests.Request) error {
 		return errors.ErrDeleteAPIKey.WithArgs(r.Key.ID, "not found")
 	}
 	user.APIKeys = keys
+	user.Revise()
 	return nil
 }
 
@@ -443,6 +454,7 @@ func (user *User) AddMfaToken(r *requests.Request) error {
 		}
 	}
 	user.MfaTokens = append(user.MfaTokens, token)
+	user.Revise()
 	return nil
 }
 
@@ -461,6 +473,7 @@ func (user *User) DeleteMfaToken(r *requests.Request) error {
 		return errors.ErrDeleteMfaToken.WithArgs(r.MfaToken.ID, "not found")
 	}
 	user.MfaTokens = tokens
+	user.Revise()
 	return nil
 }
 
@@ -523,4 +536,10 @@ func (user *User) GetChallenges() []string {
 		challenges = append(challenges, "mfa")
 	}
 	return challenges
+}
+
+// Revise increments revision number and last modified timestamp.
+func (user *User) Revise() {
+	user.Revision++
+	user.LastModified = time.Now().UTC()
 }

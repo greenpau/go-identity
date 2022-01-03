@@ -454,7 +454,7 @@ func (db *Database) Copy(fp string) error {
 // commit writes the database contents to a file.
 func (db *Database) commit() error {
 	db.Revision++
-	db.LastModified = time.Now()
+	db.LastModified = time.Now().UTC()
 	data, err := json.MarshalIndent(db, "", "  ")
 	if err != nil {
 		return errors.ErrDatabaseCommit.WithArgs(db.path, err)
