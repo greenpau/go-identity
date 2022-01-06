@@ -427,6 +427,7 @@ func (user *User) DeleteAPIKey(r *requests.Request) error {
 	for _, k := range user.APIKeys {
 		if k.ID == r.Key.ID {
 			found = true
+			r.Key.Prefix = k.Prefix
 			continue
 		}
 		keys = append(keys, k)
@@ -437,6 +438,19 @@ func (user *User) DeleteAPIKey(r *requests.Request) error {
 	user.APIKeys = keys
 	user.Revise()
 	return nil
+}
+
+// LookupAPIKey performs the lookup of API key.
+func (user *User) LookupAPIKey(r *requests.Request) error {
+	for _, k := range user.APIKeys {
+		if k.Prefix == r.Key.Prefix {
+			if k.Match(r.Key.Payload) {
+				return nil
+			}
+			return errors.ErrLookupAPIKeyFailed
+		}
+	}
+	return errors.ErrLookupAPIKeyFailed
 }
 
 // AddMfaToken adds MFA token to a user identity.

@@ -89,6 +89,7 @@ type User struct {
 // Key holds crypto key attributes.
 type Key struct {
 	ID       string `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
+	Prefix   string `json:"prefix,omitempty" xml:"prefix,omitempty" yaml:"prefix,omitempty"`
 	Comment  string `json:"comment,omitempty" xml:"comment,omitempty" yaml:"comment,omitempty"`
 	Usage    string `json:"usage,omitempty" xml:"usage,omitempty" yaml:"usage,omitempty"`
 	Payload  string `json:"payload,omitempty" xml:"payload,omitempty" yaml:"payload,omitempty"`

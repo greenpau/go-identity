@@ -21,6 +21,7 @@ const (
 	ErrAPIKeyCommentEmpty     StandardError = "api key comment is empty"
 	ErrAPIKeyUsageUnsupported StandardError = "api key usage type %q is unsupported"
 
-	ErrLookupAPIKeyPayloadEmpty StandardError = "api key payload is empty"
-	ErrLookupAPIKeyFailed       StandardError = "api key lookup failed"
+	ErrLookupAPIKeyPayloadEmpty     StandardError = "api key payload is empty"
+	ErrLookupAPIKeyFailed           StandardError = "api key lookup failed"
+	ErrLookupAPIKeyMalformedPayload StandardError = "api key payload is malformed"
 )

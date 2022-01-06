@@ -181,10 +181,10 @@ func NewDatabase(fp string) (*Database, error) {
 			}
 		}
 		for _, apiKey := range user.APIKeys {
-			if _, exists := db.refAPIKey[apiKey.Payload]; exists {
-				return nil, errors.ErrNewDatabaseDuplicateAPIKey.WithArgs(apiKey.Payload, user)
+			if _, exists := db.refAPIKey[apiKey.Prefix]; exists {
+				return nil, errors.ErrNewDatabaseDuplicateAPIKey.WithArgs(apiKey.Prefix, user)
 			}
-			db.refAPIKey[apiKey.Payload] = user
+			db.refAPIKey[apiKey.Prefix] = user
 		}
 	}
 	return db, nil
@@ -555,17 +555,20 @@ func (db *Database) AddAPIKey(r *requests.Request) error {
 			failCount++
 			continue
 		}
-		if _, exists := db.refAPIKey[hk.Hash]; exists {
+		keyPrefix := string(s[:24])
+		if _, exists := db.refAPIKey[keyPrefix]; exists {
 			continue
 		}
 		r.Response.Payload = s
 		r.Key.Payload = hk.Hash
+		r.Key.Prefix = keyPrefix
+		if err := user.AddAPIKey(r); err != nil {
+			return err
+		}
+		db.refAPIKey[keyPrefix] = user
 		break
 	}
 
-	if err := user.AddAPIKey(r); err != nil {
-		return err
-	}
 	if err := db.commit(); err != nil {
 		return errors.ErrAddAPIKey.WithArgs(r.Key.Usage, err)
 	}
@@ -583,6 +586,7 @@ func (db *Database) DeleteAPIKey(r *requests.Request) error {
 	if err := user.DeleteAPIKey(r); err != nil {
 		return err
 	}
+	delete(db.refAPIKey, r.Key.Prefix)
 	if err := db.commit(); err != nil {
 		return errors.ErrDeleteAPIKey.WithArgs(r.Key.Usage, err)
 	}
@@ -662,11 +666,18 @@ func (db *Database) LookupAPIKey(r *requests.Request) error {
 	if r.Key.Payload == "" {
 		return errors.ErrLookupAPIKeyPayloadEmpty
 	}
+	if len(r.Key.Payload) < 72 {
+		return errors.ErrLookupAPIKeyMalformedPayload
+	}
+	r.Key.Prefix = string(r.Key.Payload[:24])
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	user, exists := db.refAPIKey[r.Key.Payload]
+	user, exists := db.refAPIKey[r.Key.Prefix]
 	if !exists {
 		return errors.ErrLookupAPIKeyFailed
+	}
+	if err := user.LookupAPIKey(r); err != nil {
+		return err
 	}
 	r.User.Username = user.Username
 	r.User.Email = user.GetMailClaim()

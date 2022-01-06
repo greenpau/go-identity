@@ -17,6 +17,7 @@ package identity
 import (
 	"github.com/greenpau/go-identity/pkg/errors"
 	"github.com/greenpau/go-identity/pkg/requests"
+	"golang.org/x/crypto/bcrypt"
 	"time"
 )
 
@@ -29,6 +30,7 @@ type APIKeyBundle struct {
 // APIKey is an API key.
 type APIKey struct {
 	ID         string    `json:"id,omitempty" xml:"id,omitempty" yaml:"id,omitempty"`
+	Prefix     string    `json:"prefix,omitempty" xml:"prefix,omitempty" yaml:"prefix,omitempty"`
 	Usage      string    `json:"usage,omitempty" xml:"usage,omitempty" yaml:"usage,omitempty"`
 	Comment    string    `json:"comment,omitempty" xml:"comment,omitempty" yaml:"comment,omitempty"`
 	Payload    string    `json:"payload,omitempty" xml:"payload,omitempty" yaml:"payload,omitempty"`
@@ -79,6 +81,7 @@ func NewAPIKey(r *requests.Request) (*APIKey, error) {
 	p := &APIKey{
 		Comment:   r.Key.Comment,
 		ID:        GetRandomString(40),
+		Prefix:    r.Key.Prefix,
 		Payload:   r.Key.Payload,
 		Usage:     r.Key.Usage,
 		CreatedAt: time.Now().UTC(),
@@ -96,4 +99,12 @@ func (p *APIKey) Disable() {
 	p.ExpiredAt = time.Now().UTC()
 	p.Disabled = true
 	p.DisabledAt = time.Now().UTC()
+}
+
+// Match returns true when the provided API matches.
+func (p *APIKey) Match(s string) bool {
+	if err := bcrypt.CompareHashAndPassword([]byte(p.Payload), []byte(s)); err == nil {
+		return true
+	}
+	return false
 }
