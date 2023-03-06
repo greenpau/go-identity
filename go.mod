@@ -9,5 +9,5 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/urfave/cli/v2 v2.3.0
 	go.uber.org/zap v1.19.0
-	golang.org/x/crypto v0.0.0-20210813211128-0a44fdfbc16e
+	golang.org/x/crypto v0.1.0
 )
